@@ -1,121 +1,295 @@
-# ForwardCheck SG
+# ForwardCheck
 
-**Verify forwarded claims before you pass them on.**
+Paste a forwarded message. Get a verdict for every claim in it, with cited evidence.
 
-[github.com/yijiechong13/forwardcheck](https://github.com/yijiechong13/forwardcheck)
+![Status](https://img.shields.io/badge/status-MVP-lightgrey)
+![Backend](https://img.shields.io/badge/backend-FastAPI-informational)
+![Frontend](https://img.shields.io/badge/frontend-Next.js%2016-informational)
+![Python](https://img.shields.io/badge/python-3.13-blue)
+![Tests](https://img.shields.io/badge/tests-83%20passing-brightgreen)
+![License](https://img.shields.io/badge/license-MIT-lightgrey)
 
-ForwardCheck SG is an agentic RAG web app that decomposes forwarded public-interest claims,
-retrieves official Singapore source evidence, and produces claim-level verdicts with citations,
-timelines and shareable corrections.
+## Overview
 
-It answers one question: *is this claim supported, misleading, outdated, false, or insufficiently
-evidenced by official Singapore sources?*
+ForwardCheck is a verification assistant for factual claims in forwarded messages — the kind
+that circulate in WhatsApp and Telegram groups about government policies, fines, deadlines,
+eligibility rules, public advisories and product recalls. You paste the message in, and it
+returns an evidence-backed verdict for each individual claim rather than one blanket judgment
+on the whole thing.
 
-It is **not** a chatbot, not an "ask an LLM if this is true" wrapper, and **not a scam or
-phishing detector** — detecting malicious intent is a separate problem with separate signals.
+The design premise is that these messages are rarely fabricated outright. They usually start
+from something real — an actual policy, an actual recall — and then overstate it. The scale of
+a penalty grows, a recall of one batch becomes a recall of everything, a rule for one group is
+applied to everyone. A single true-or-false answer cannot express that, and answering "false"
+to a message that is half correct is its own inaccuracy.
 
-Scope is **Singapore only** — one jurisdiction gives a controlled source hierarchy and an
-evaluation set that can be labelled with confidence.
+Scope is Singapore-only, and the verification corpus is **seeded sample data** rather than live
+web search. See [What this is and is not](#what-this-is-and-is-not) — that distinction matters
+for reading everything below, and is stated up front rather than buried.
 
----
+## What this is and is not
+
+Being precise about the current implementation:
+
+| | Status |
+|---|---|
+| Claim decomposition, routing, retrieval, grading, verdicts | **Implemented**, deterministic (rule-based) |
+| Evidence corpus | **38 seeded sample documents**, hand-written to resemble official advisories |
+| Retrieval | **Implemented** — BM25 lexical scoring over the in-memory corpus |
+| LLM involvement | **None.** No model is called anywhere in the pipeline |
+| Live web search / page fetching / scraping | **Not implemented** — interface defined, raises `NotImplementedError` |
+| Vector database, embeddings, reranking | **Not implemented** |
+| Deployment | **Not deployed** — runs locally |
+
+The LLM and web-search adapters exist as **interfaces with documented contracts and unimplemented
+bodies**. They mark where those systems attach; they do not pretend to work. The application runs
+end-to-end with no API keys because nothing external is called.
+
+This is a **retrieval-grounded verification pipeline** whose retrieval currently targets a curated
+local corpus. It is not a RAG system with a live index, and it is not a scam or phishing detector —
+it evaluates factual claims, not sender intent.
 
 ## The problem
 
-Forwarded messages rarely invent an event from nothing. They take a *real* event and push its
-status one or more rungs up a ladder:
+A typical forwarded policy message combines:
 
-| What actually happened | What the forward says |
-|---|---|
-| under investigation | **charged** |
-| charged | **convicted** |
-| up to $5,000 on conviction | **you will automatically be fined $5,000** |
-| one recalled batch | **all bottles, throw them away** |
-| $500 per household | **$500 for every Singaporean** |
-| vouchers | **cash** |
-| recalled overseas | **recalled in Singapore** |
-| policy passed in Parliament | **policy in force, fines start now** |
-| precautionary packaging recall | **contains toxins** |
+- a real organisation and a real policy
+- a plausible but incorrect date or deadline
+- an exaggerated consequence (a maximum penalty presented as automatic)
+- missing eligibility conditions (a household benefit described as per-person)
+- an outdated announcement presented as current
+- an instruction to forward it onward
 
-A generic fact-checker answers "true or false?" about the whole message — which is the wrong
-question, because these messages are usually *partly* true. Telling someone their message is
-"false" when the deadline in it is real gets the fact-check dismissed entirely.
+Keyword matching cannot separate these, because the keywords are genuine — the message really is
+about cat licensing, and there really is a $5,000 figure in the legislation. A single web search
+does not resolve it either, since the top result usually confirms the *topic* while saying nothing
+about the *specific* assertion. What is needed is claim-by-claim comparison against a source that
+states the actual scope and modality.
 
-ForwardCheck SG decomposes the message into atomic status claims and gives each one its own
-verdict, evidence, and confidence.
+## How it works
 
-### Three axes of overstatement
+```mermaid
+flowchart TD
+    A["Forwarded message"] --> B["Normalise: strip forwarding cruft, emoji, urgency markers"]
+    B --> C["Decompose into individual factual claims"]
+    C --> D["Route: classify status type, domain, jurisdiction"]
+    D --> E["Retrieve evidence: BM25 over seeded corpus, weighted by source tier"]
+    E --> F["Grade each claim against each source"]
+    F --> G["Freshness: check evidence age, build status timeline"]
+    G --> H["Verdict per claim, then overall"]
+    H --> I["Cited results, timeline, shareable correction"]
+```
 
-Status escalation was the original model. It turns out to be one axis of three — and a system
-that models only status passes two-thirds of real forwards as accurate.
+Each stage is a separate module in `backend/app/pipeline/`, and each appends a step to a trace
+that the UI exposes.
 
-| Axis | What is overstated | Example |
+1. **Normalise** — removes forwarding appeals, emoji and urgency banners, and normalises date
+   references. What was removed is recorded rather than discarded, since "this message told you
+   to forward it" is itself informative.
+2. **Decompose** — splits the message into individually checkable claims. This handles elided
+   subjects (`"arrested at Changi and convicted"` → two claims), appositive scope extensions
+   (`"All cats, including community cats"` → the rule and the scope extension separately),
+   compound assertions, and causal clauses (a recall and its stated reason).
+3. **Route** — classifies each claim by status type (charge, penalty, eligibility, recall scope,
+   deadline …), domain, and jurisdiction.
+4. **Retrieve** — BM25 lexical scoring over the corpus, multiplied by a source-tier weight, with
+   a status-aware boost. Scores below an absolute floor return no results at all.
+5. **Grade** — labels each (claim, document) pair `supports`, `refutes`, `partially_supports`
+   or `does_not_answer`.
+6. **Freshness** — flags evidence older than a configurable threshold and constructs the status
+   timeline.
+7. **Verdict** — assigns a per-claim verdict and confidence, then an overall label, and writes a
+   short correction suitable for sending back to the group.
+
+## Example
+
+Real output from the application for one of the seeded example messages:
+
+> From 1 Sept, HDB cat owners with more than 2 cats will be fined $5,000 and AVS will remove the
+> extra cats. All cats, including community cats, must be licensed by 31 Aug. Forward to all cat owners.
+
+**Overall verdict: Misleading**
+
+| Extracted claim | Verdict | Explanation |
 |---|---|---|
-| **Status** | the stage reached | investigated → charged |
-| **Scope** | who or what is covered | one batch → all products; per household → per person |
-| **Modality** | how certain or automatic | up to $5,000 on conviction → automatically fined |
+| Cats must be licensed by 31 Aug | **Supported** | Source asserts the same deadline for this matter |
+| Owners with more than 2 cats will be fined $5,000 | **Misleading** | Source describes this as a maximum penalty decided case by case, not an automatic consequence |
+| AVS will remove the extra cats | **Misleading** | Source states owners will not be required to give up their animals |
+| Community cats must be licensed by 31 Aug | **Misleading** | Source places this group outside the scope of the rule |
 
-These are independent. *"Anyone caught automatically gets 10 years"* overstates scope **and**
-modality while getting the status rung exactly right.
+One claim is genuinely correct. Returning "false" for the whole message would misrepresent it and
+would give anyone who knows the deadline is real a reason to dismiss the correction entirely.
 
-### What it verifies
+The seeded example messages are **synthetic, forwarded-style claims written to resemble real
+Singapore public information**. They are not captured private messages.
 
-1. **Policy / regulatory status** — proposed, passed, in force, enforced
-2. **Fines, penalties, deadlines, eligibility scope** — maximums vs automatic, who qualifies
-3. **Product and food recalls** — Singapore vs overseas, affected batch vs whole product
-4. **Legal / news status** — investigated, arrested, charged, convicted, sentenced
+## Verdict labels
 
-### What it actually does
+The application uses a closed set of five labels:
 
-Paste this in:
-
-> Every Singaporean will get $500 CDC vouchers in cash this month, including PRs.
-> Must claim by Sunday or lose it.
-
-And it returns:
-
-| Claim | Verdict | Why |
-|---|---|---|
-| Every Singaporean will get $500 CDC vouchers | **Misleading** | The $500 is allocated **per household**, not to each individual |
-| The vouchers are given as cash | **Misleading** | They are vouchers redeemed at merchants; they cannot be exchanged for cash |
-| PRs are also eligible | **Insufficient evidence** | Sources say *Singaporean households*, and are silent on PRs |
-| Must claim by Sunday | **Insufficient evidence** | No source states a one-week deadline |
-
-Two claims are wrong in different ways; two the evidence simply does not answer. Reporting those
-last two as False would be its own fabrication — **the system says it does not know.**
-
-Plus a status timeline showing which stages the evidence actually reaches, and a share-ready
-correction for the group chat it came from.
-
-> **About the demo messages.** The seeded examples are **synthetic forwarded-style claims
-> derived from real Singapore public information** — written to resemble how such messages
-> circulate. They are not captured private WhatsApp or Telegram messages.
-
-## Verdict vocabulary
-
-Five labels, closed set: `Supported` · `Misleading` · `False` · `Outdated` · `Insufficient evidence`
-
-**Abstention is a first-class outcome.** The system prefers "Insufficient evidence" over
-inventing an answer, and the eval harness measures whether it actually does.
-
-## Source hierarchy
-
-| Tier | Sources |
+| Label | Meaning |
 |---|---|
-| **Primary** | Singapore Statutes Online, court records |
-| **Official** | gov.sg, SPF, AGC, AVS/NParks, HSA, SFA, MOM, MOH, ICA, CSA, MND, MINDEF |
-| **Credible news** | CNA, The Straits Times, TODAY, Mothership, Mediacorp/Channel 8 |
-| **Not proof** | blogs, aggregators, social posts, forwarded screenshots |
+| `Supported` | Evidence backs the claim as stated |
+| `Misleading` | Partly true, but the status, scope or certainty is overstated |
+| `False` | Evidence directly contradicts the claim |
+| `Outdated` | Supporting evidence exists but is older than the freshness threshold |
+| `Insufficient evidence` | No retrieved source addresses the claim either way |
 
-Secondary and social sources can show a claim is circulating; they never establish it is true.
-Non-allowlisted domains are dropped rather than admitted at a guessed tier.
+The vocabulary is closed because free-text verdicts cannot be evaluated. `Insufficient evidence`
+is a first-class outcome, not a failure path: when retrieval returns nothing above threshold, the
+pipeline abstains instead of producing a confident answer. The evaluation harness measures this
+explicitly.
 
----
+## Key features
 
-## Running locally
+**Claim-level verification.** A message is decomposed into separate claims, each with its own
+verdict, confidence, cited evidence IDs and one-line explanation.
 
-Two terminals. **No API keys required** — every adapter defaults to mock mode.
+**Three axes of overstatement.** Beyond status escalation (`investigated` → `charged`), the
+grader models *scope* (one batch → all products; per household → per person) and *modality*
+(up to $5,000 on conviction → automatically fined). These are independent — a claim can get the
+status exactly right and still be false on both other axes.
 
-### Backend
+**Bounded-source guard.** A source that bounds a fact ("three specified batches") never *supports*
+a claim that unbounds it ("all milk powder"); it refutes it. Implemented in `pipeline/grade.py`.
+
+**Abstention.** Claims with no qualifying evidence return `Insufficient evidence`. Every
+non-abstaining verdict must cite at least one evidence ID, and this is asserted in tests.
+
+**Source-tier weighting.** Retrieval scores are multiplied by a per-tier weight
+(`primary` 1.0, `official` 0.9, `credible_news` 0.65, `secondary` 0.3) in
+`services/retrieval_adapter.py`. This is deterministic, not prompt-based.
+
+**Time-aware handling.** Evidence carries a publication date. Documents older than
+`FORWARDCHECK_STALE_DAYS` (default 540) are flagged, and a claim supported *only* by stale
+evidence returns `Outdated` rather than `Supported`. Retrieved evidence is also arranged into a
+status timeline where stages with no supporting document are explicitly marked as not found.
+
+**Shareable correction.** A short, plain-language summary of what is true and what is not, sized
+for pasting back into a group chat.
+
+**Pipeline trace.** Every node's inputs, outputs, retrieved evidence IDs and timings are exposed
+in the UI for inspection.
+
+## Retrieval and verification pipeline
+
+The most technically substantive part of the repository.
+
+**Retrieval** is BM25 (`k1=1.5`, `b=0.75`) implemented directly in
+`services/retrieval_adapter.py` over 38 in-memory documents. Title and asserted status are
+weighted by repetition. Three details do the real work:
+
+- **Absolute score floor.** Normalising scores relative to the best hit makes the top result
+  score 1.0 even when nothing matched. A raw-score floor is applied *before* normalisation, and
+  results are damped when the best raw score is weak. Without this, an unrelated query returns
+  confident, irrelevant "evidence".
+- **Message-level context.** Individual claims are short and share vocabulary across topics. Each
+  query is augmented with distinctive terms from the whole message, and the dominant topic cluster
+  is resolved once from the full message and used to bias (not filter) per-claim results.
+- **Guaranteed inclusion.** The top exact-status match is retained even if outranked, since the
+  statute defining a penalty is often the only document that can distinguish "maximum" from
+  "automatic".
+
+**Grading** is a priority-ordered rule cascade in `pipeline/grade.py`: explicit negation →
+substance denial → scope/modality mismatch → out-of-scope subject → status-rung comparison →
+lexical fallback. A document that does not clearly address a claim grades `does_not_answer`;
+silence is never read as agreement.
+
+**Source-quality handling** operates at two levels. Retrieval-time tier weighting is deterministic
+and always applied. A separate domain allowlist in `services/search_adapter.py` maps Singapore
+government, statutory-board and established-news domains to tiers — this is defined and unit-tested
+but is only used by the unimplemented live-search path.
+
+**Why a local corpus.** Policies, advisories and recalls change, which is a strong argument for
+live retrieval, and the architecture is built to accept it. The current MVP deliberately uses a
+seeded corpus so the pipeline can be evaluated against known-correct labels — the corpus is
+constructed so that several demo messages *cannot* be fully answered, which is what makes
+abstention testable.
+
+## Architecture
+
+```
+Next.js (App Router)  ──POST /verify──▶  FastAPI
+                                            │
+                                    PipelineState
+                                            │
+      normalise → decompose → route → retrieve → grade → freshness → verdict
+                                            │
+                           Adapters (env-selected, mock by default)
+                           LLM · Retrieval · Search
+```
+
+`pipeline/graph.py` is a small, hand-written state-graph runner: nodes are `(state) -> state`
+functions registered on a graph, with automatic trace capture. It is deliberately shaped like
+LangGraph so that migrating is mechanical, but LangGraph is **not** a dependency.
+
+Adapters are selected by environment variable and default to mock. Selecting a non-mock backend
+without its key raises at startup rather than silently downgrading, so a run cannot be believed to
+be LLM-backed while quietly being rule-based.
+
+## Tech stack
+
+| Layer | Technology |
+|---|---|
+| Frontend | Next.js 16 (App Router), React 19, TypeScript, Tailwind CSS v4 |
+| Backend | FastAPI, Pydantic v2, Python 3.13, Uvicorn |
+| Pipeline | Custom state-graph runner (no external orchestration library) |
+| Retrieval | BM25 implemented in-repo, over an in-memory document store |
+| LLM | None currently invoked; adapter interface defined for Anthropic |
+| Storage | None — no database, no cache, no persistence |
+| Testing | pytest (83 tests), custom evaluation harness |
+| Deployment | Not deployed; local development only |
+
+## Project structure
+
+```
+backend/
+  app/
+    main.py              FastAPI app: /verify, /health, /config
+    config.py            Env-var settings; every adapter defaults to mock
+    models/
+      schemas.py         Pydantic request/response models, camelCase aliases
+      status.py          Status ladders, claim axes, domain mappings
+    pipeline/
+      graph.py           State-graph runner and PipelineState
+      normalise.py       ─┐
+      decompose.py        │
+      route.py            │  one module per pipeline node
+      retrieve.py         │
+      grade.py            │
+      freshness.py        │
+      verdict.py         ─┘
+      runner.py          Assembles and runs the graph
+    services/
+      retrieval_adapter.py   BM25 implementation + pgvector interface stub
+      llm_adapter.py         LLM interface; Anthropic body unimplemented
+      search_adapter.py      Domain allowlist; live-search body unimplemented
+    data/
+      mock_sources.py    38 seeded evidence documents in 9 topic clusters
+    eval/harness.py      Metric scoring against the labelled dataset
+    tests/               83 tests + eval_dataset.json (10 cases, 24 claims)
+  scripts/run_eval.py    CLI evaluation report; non-zero exit on failure
+
+frontend/
+  src/
+    app/page.tsx         Main page and result composition
+    components/          One component per result section
+    lib/
+      api.ts             Typed client for POST /verify
+      types.ts           Mirrors the backend schema
+      examples.ts        Seeded demo messages
+```
+
+## Getting started
+
+**Prerequisites:** Python 3.11+ and Node.js 18+. No API keys are required.
+
+```bash
+git clone https://github.com/yijiechong13/forwardcheck.git
+cd forwardcheck
+```
+
+**Backend**
 
 ```bash
 cd backend
@@ -124,7 +298,7 @@ pip install -r requirements.txt
 uvicorn app.main:app --reload --port 8000
 ```
 
-### Frontend
+**Frontend** (separate terminal)
 
 ```bash
 cd frontend
@@ -132,164 +306,89 @@ npm install
 npm run dev
 ```
 
-Open **http://localhost:3000**. API docs at http://localhost:8000/docs.
+Open http://localhost:3000. Interactive API docs at http://localhost:8000/docs.
 
-If the header shows "API OFFLINE", the backend is not running.
+### Environment variables
 
-## Tests and evaluation
+All optional — the application runs fully with none set. These are the names actually read by
+the code:
+
+```env
+# Adapter selection (default: mock for all three)
+FORWARDCHECK_LLM=mock              # mock | anthropic (anthropic unimplemented)
+FORWARDCHECK_RETRIEVAL=mock        # mock | pgvector (pgvector unimplemented)
+FORWARDCHECK_SEARCH=mock           # mock | web      (web unimplemented)
+
+# Tuning
+FORWARDCHECK_STALE_DAYS=540        # evidence older than this is flagged stale
+FORWARDCHECK_MIN_SCORE=0.28        # retrieval score floor; higher = more abstention
+FORWARDCHECK_MAX_EVIDENCE=4        # max evidence documents per claim
+FORWARDCHECK_CORS_ORIGINS=http://localhost:3000,http://127.0.0.1:3000
+
+# Only read if the corresponding adapter is switched away from mock
+ANTHROPIC_API_KEY=your_anthropic_api_key
+SEARCH_API_KEY=your_search_api_key
+DATABASE_URL=postgresql://localhost:5432/forwardcheck
+
+# Frontend
+NEXT_PUBLIC_API_BASE_URL=http://localhost:8000
+```
+
+### Tests and evaluation
 
 ```bash
-cd backend
-.venv/bin/python -m pytest app/tests -v
+cd backend && .venv/bin/python -m pytest app/tests -v
 ```
 
 ```bash
 cd backend && .venv/bin/python scripts/run_eval.py --verbose
 ```
 
-The eval report scores six metrics against defined targets and exits
-non-zero if any target is missed or any **critical error** occurs — a critical error being a false
-endorsement, a lost escalation, or a confident answer where the evidence does not support one.
+The evaluation harness scores six metrics — claim decomposition F1, routing accuracy, verdict
+accuracy, citation presence, abstention recall and escalation detection — against a labelled
+dataset of 10 messages and 24 gold claims, and exits non-zero if a target is missed or a
+*critical error* occurs (endorsing a false claim, or answering confidently where the gold label
+is abstain).
 
-Current: **83 tests passing**, 10 eval cases / 24 gold claims across all three axes and all
-three domains, all targets met, **zero critical errors**.
+**These numbers are regression guards, not a generalisation estimate.** The evidence corpus was
+written for these cases, so a high score demonstrates that known behaviour has not regressed. It
+says nothing about performance on unseen messages, and should not be read as an accuracy claim.
 
----
+## Limitations
 
-## Demo script
+- **The evidence corpus is seeded sample data.** Documents are hand-written to resemble official
+  advisories, are labelled `isMock: true` throughout the API and UI, and use placeholder URLs.
+  ForwardCheck does not currently verify claims against live official sources.
+- **Grading is rule-based.** It recognises the escalation, scope and modality patterns it was
+  written to catch. Novel phrasing falls through to `does_not_answer` — deliberately, since
+  falling through to abstention is safe and falling through to support is not.
+- **Lexical retrieval is vocabulary-sensitive.** A claim phrased differently from the source
+  ("milk powder" vs "infant formula") may not match. This is the clearest argument for adding
+  dense retrieval.
+- **Cross-cluster disambiguation is heuristic.** Biasing toward the message's dominant topic works
+  because the corpus is well-separated; a production corpus would need reranking.
+- **Singapore and English only.**
+- **A citation is not a proof.** The system shows which document produced a verdict; it does not
+  guarantee the document actually entails the conclusion.
+- **This is an informational tool.** It does not replace official guidance.
 
-A five-minute walkthrough. Each example breaks along a different axis.
+## Future improvements
 
-**1. Cat licensing** *(modality + scope)*
-Verify. Overall verdict is **Misleading**, not False — one claim is genuinely **Supported**.
-That is the argument for per-claim verdicts: calling the whole message false would be its own
-inaccuracy and would get the correction dismissed. The fine claim carries an escalation badge:
-*up to $5,000 on conviction* → *automatically fined*.
+- Anthropic adapter for claim decomposition and grading, evaluated against the current
+  deterministic baseline on the same harness — the rules are the control
+- Live web search restricted to the existing domain allowlist
+- Dense retrieval (pgvector) combined with BM25, addressing the vocabulary-mismatch limitation
+- Automated citation-entailment checking
+- Confidence calibration — current confidence values are uncalibrated heuristics
+- OCR for forwarded screenshots
+- Additional jurisdictions and languages
 
-**2. CDC vouchers** *(scope + abstention)*
-The strongest demo. Four claims, four different outcomes — two Misleading, two **Insufficient
-evidence**. Point out that the amount is *right* and the scheme is *real*; what is wrong is the
-unit of allocation (household, not individual) and the form (vouchers, not cash). And that the
-system refuses to answer on PR eligibility rather than guessing.
+## Responsible use
 
-**3. Vaping penalties** *(modality)*
-A real law change on a real date, with an invented consequence. "Up to, on conviction, for
-supply offences" becomes "automatic, for anyone caught". The statute is cited alongside the
-enforcement notice showing possession is treated differently from supply.
-
-**4. Milk powder recall** *(scope + invented reason)*
-A real recall — three batches of one product, for a packaging defect. The forward stretches it
-to two entire brands and swaps the reason for "toxins". The reason claim comes back **False**:
-the source states explicitly there was no contamination.
-
-**5. Calamine lotion** *(scope, minimal case)*
-"Contains cadmium" is **Supported** — that genuinely happened, in one batch. "Throw away all
-bottles" is **Misleading**. The same sentence pair, one true and one not, is the cleanest
-illustration of why whole-message verdicts fail.
-
-**6. Developer trace**
-Expand it on any result. Seven nodes, the evidence IDs each retrieved, and the rule behind each
-verdict. Point out `retrieve` → `messageCluster`: short claims share vocabulary across clusters
-("recall", "batch", "10 years jail"), so the cluster is resolved once from the whole message and
-claims are biased toward it — otherwise you get the right verdict citing the wrong case.
-
-**7. Out of scope** *(the honesty check)*
-Type something the corpus does not cover. It returns **Insufficient evidence**, not a guess.
-This case is in the eval set because an earlier version got it wrong: it returned "Supported",
-cited to cat-licensing documents.
-
----
-
-## Architecture
-
-```
-Next.js UI  ──POST /verify──>  FastAPI
-                                  │
-        normalise → decompose → route → retrieve → grade → freshness → verdict
-                                  │
-                    adapters: LLM · Retrieval · Search   (all mock by default)
-```
-
-Seven nodes, each `(state) -> state`, each appending a trace step.
-
-A graph rather than a single prompt, because a forwarded message is usually *partly* true: one
-opaque answer destroys that, while a graph of small typed nodes gives per-claim granularity, an
-auditable middle, and swappable adapters. Verdicts are produced by `verdict.py` deterministically
-— the LLM adapter is scoped to classification over a closed label set and to prose, never to
-deciding a verdict.
-
-### Reading the code
-
-| Path | What lives there |
-|---|---|
-| `backend/app/models/status.py` | Status ladders and the three overstatement axes |
-| `backend/app/pipeline/` | The seven nodes, one file each |
-| `backend/app/data/mock_sources.py` | The 38-document seeded corpus, with cluster rationale |
-| `backend/app/services/` | LLM / retrieval / search adapter interfaces |
-| `backend/app/tests/` | 83 tests, incl. scope-and-modality behaviour |
-| `frontend/src/components/` | One component per result section |
-
-Design decisions are documented as comments at the point they apply, rather than in a separate
-document that drifts from the code.
-
-## Tech stack
-
-**Frontend** — Next.js 16, TypeScript, Tailwind v4, monochrome design, light/dark
-**Backend** — FastAPI, Pydantic v2, modular pipeline services
-**RAG** — internal LangGraph-shaped graph, BM25 lexical retrieval with tier weighting, adapter
-interfaces for Anthropic / pgvector / web search
-
-## Evidence honesty
-
-All bundled evidence is **seeded mock data**, hand-written to resemble real advisories and
-labelled `isMock: true` in the API and the UI. The demo messages are **synthetic
-forwarded-style claims derived from real Singapore public information**, not captured private
-messages. URLs are placeholders. ForwardCheck SG never presents
-a fabricated citation as a real one, and the test suite asserts it.
-
-## Screenshots
-
-To capture screenshots for a portfolio or README:
-
-1. Start both servers, open http://localhost:3000.
-2. Load the **CDC vouchers** example and verify — it shows the widest range of verdicts on one
-   screen (Misleading + Insufficient evidence, with scope escalation badges).
-3. Capture the overall verdict card and claims table together.
-4. Scroll to the **timeline** and capture it separately — the "NOT FOUND IN AVAILABLE EVIDENCE"
-   markers are the most distinctive thing in the UI.
-5. Expand the **developer trace** and capture one node's JSON detail.
-6. Repeat in light and dark mode (the page follows your OS setting).
-
-Save to `docs/screenshots/` and reference them here.
-
----
-
-## Roadmap
-
-| Next | Why it matters |
-|---|---|
-| **Anthropic API adapter** | Replace rule-based decomposition and grading. The rules are the control — the LLM ships only if it beats them on critical errors and abstention recall. |
-| **pgvector + hybrid retrieval** | Fixes the documented failure where official denials ("no person has been charged") share no vocabulary with the claim. The strongest argument for embeddings in this codebase. |
-| **Live web search** | Domain allowlist and tier mapping already exist in `search_adapter.py`. |
-| **Telegram bot frontend** | Meet the message where it actually circulates — forward straight to a bot. |
-| **Second jurisdiction** | The ladders and pipeline are jurisdiction-agnostic; only the corpus and allowlist are SG-specific. Adding one is a data problem, not an architecture problem. |
-| **OCR for screenshots** | Most forwards arrive as screenshots, not text. |
-| **Source freshness monitoring** | Re-check cached verdicts when a source updates; a charge becoming a conviction should invalidate the old answer. |
-| **Confidence calibration** | The confidence numbers are currently uncalibrated heuristics. They should be measured before they are trusted. |
-
-## Known limitations
-
-- Evidence is seeded, so retrieval quality is measured against a corpus built for these cases.
-  The eval numbers are **regression guards, not a generalisation estimate**.
-- Rule-based grading recognises the escalation, scope and modality patterns it was taught; novel
-  phrasing falls through to `does_not_answer`. That direction is deliberate — falling through to
-  abstention is safe, falling through to support is not.
-- Cross-cluster retrieval is handled by biasing toward the message's dominant cluster. This works
-  because clusters are seeded and well-separated; a production corpus would need reranking.
-- English only. Singapore Chinese/Malay/Tamil forwards are out of MVP scope.
-- Singapore only. The status ladders generalise, but the corpus and source hierarchy do not.
-- Cluster-aware retrieval expansion works because the corpus is seeded and clustered. It would
-  not survive a real corpus, and it is marked as such in the code.
+ForwardCheck is an informational verification aid. Verdicts are produced by rule-based analysis of
+a seeded document corpus and may be incomplete or wrong. For any decision with legal, financial,
+medical or safety consequences, consult the relevant official source directly rather than relying
+on this tool.
 
 ## License
 
