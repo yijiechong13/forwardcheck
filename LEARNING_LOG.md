@@ -108,3 +108,56 @@ while being exactly the failure the product exists to prevent — and it hides t
   Cost: server-side code reads `.value` strings back out of dumped models rather than enums.
 - *Contract tests separate from verdict quality.* These tests assert shape only. Verdict accuracy
   is deliberately deferred to the Phase 5 eval harness, so pipeline changes do not churn them.
+
+---
+
+## Phase 3 — Deterministic pipeline
+
+**What was built**
+All seven nodes, the 19-document seeded corpus, and 25 pipeline tests. The three demo claims work
+end to end with the verdicts the spec asks for.
+
+**Files changed**
+`backend/app/data/mock_sources.py`, `backend/app/pipeline/{normalise,decompose,route,retrieve,grade,freshness,verdict,runner}.py`,
+`backend/app/services/retrieval_adapter.py`, `backend/app/tests/test_pipeline.py`.
+
+**What RAG concept this phase teaches**
+
+*Retrieval is the hard part, and lexical retrieval fails in a specific, learnable way.* Three
+real bugs surfaced while building this, all of them retrieval bugs rather than reasoning bugs:
+
+1. **Topical drift.** Querying with the claim alone matched "Rocky's owner has been charged"
+   against cat-licensing documents, because "cat"/"animal" bridge unrelated clusters. Fixed by
+   adding message-level context terms to every query, which anchors all claims to one event.
+2. **Vocabulary mismatch on denials.** The document that settles the Rocky case says "no person
+   has been charged" — phrased in official register, sharing almost no words with the forward.
+   Pure BM25 will never retrieve it. This is the canonical case for dense retrieval; the
+   deterministic stand-in is cluster-aware rebuttal expansion.
+3. **Rank cutoff hiding the decisive document.** The statute defining the $5,000 *maximum* scored
+   5th and fell outside `max_evidence_per_claim`, so the claim lost the only source that could
+   distinguish "maximum" from "automatic". Fixed by guaranteeing the top exact-status match.
+
+The general lesson: **a RAG system's failures are usually upstream of the model.** The grader was
+never wrong in these cases — it was never shown the right document.
+
+*A second lesson: the corpus must be able to not answer.* Two clusters deliberately stop one rung
+short of the forwarded claim. If the evidence store can answer everything, abstention can never
+be tested, and abstention is the behaviour that keeps the system honest.
+
+**What to study next**
+- Dense retrieval and hybrid search (reciprocal rank fusion) — bug 2 above is exactly what
+  embeddings solve, and it is the strongest argument for adding pgvector.
+- Cross-encoder reranking, which would replace the hand-tuned exact-status guarantee.
+- NLI-based claim verification (entailment/contradiction), the learned version of `grade.py`.
+
+**Trade-offs made**
+- *Rules over an LLM.* Every verdict is explainable in one sentence and assertable in a test, and
+  the app runs with no key. The cost is brittleness: `grade.py` recognises the escalation patterns
+  it was taught, and a novel phrasing falls through to `does_not_answer`. That failure direction
+  is deliberate — falling through to abstention is safe, falling through to support is not.
+- *Cluster-aware retrieval expansion.* Honest about what it is: a stand-in for semantic search
+  that works because the corpus is seeded and clustered. It would not survive a real corpus, and
+  it is marked as such in the code.
+- *Timeline restricted to the dominant cluster.* Found while testing: a weakly-matched document
+  from the NS case was rendering "Charge ✓" on Rocky's timeline — a false confirmation sourced
+  from an unrelated case, the exact error this product exists to prevent. Cheap guard, real bug.

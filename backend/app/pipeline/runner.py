@@ -1,91 +1,78 @@
-"""Assembles and runs the verification graph.
-
-Phase 2: returns a structurally valid stub response so the frontend can be
-wired to a real endpoint. Phase 3 replaces the stub with the seven real nodes;
-the signature and response shape do not change.
-"""
+"""Assembles and runs the verification graph."""
 
 from __future__ import annotations
 
-from app.models.schemas import (
-    Claim,
-    EvidenceGrade,
-    GradeLabel,
-    TimelineEntry,
-    Verdict,
-    VerifyResponse,
-)
-from app.models.status import Domain, Jurisdiction, StatusType
+from datetime import datetime, timezone
+
+from app.models.schemas import VerifyResponse
+from app.pipeline.decompose import decompose
+from app.pipeline.freshness import freshness
+from app.pipeline.grade import grade
 from app.pipeline.graph import Graph, PipelineState
+from app.pipeline.normalise import normalise
+from app.pipeline.retrieve import retrieve
+from app.pipeline.route import route
+from app.pipeline.verdict import verdict
 
 
 def build_graph() -> Graph:
-    """The verification graph. Nodes are added in Phase 3."""
-    return Graph(name="forwardcheck-verification")
+    """The verification graph.
+
+    Linear by design: each node depends on everything before it, and there is
+    no branch a forwarded message can take that skips a stage. Retrieval
+    returning nothing is handled *inside* grade/verdict as an abstention rather
+    than as an early exit, which keeps the trace complete and comparable across
+    messages — you can always see that retrieval ran and found nothing.
+    """
+    return (
+        Graph(name="forwardcheck-verification")
+        .add_node("normalise", normalise)
+        .add_node("decompose", decompose)
+        .add_node("route", route)
+        .add_node("retrieve", retrieve)
+        .add_node("grade", grade)
+        .add_node("freshness", freshness)
+        .add_node("verdict", verdict)
+    )
+
+
+def run_pipeline(message: str) -> PipelineState:
+    """Run the graph and return raw state. Used by tests and the eval harness."""
+    return build_graph().run(PipelineState(raw_message=message))
 
 
 def run_verification(message: str) -> VerifyResponse:
-    state = PipelineState(raw_message=message)
-    state = build_graph().run(state)
-    return _stub_response(state)
+    state = run_pipeline(message)
 
-
-def _stub_response(state: PipelineState) -> VerifyResponse:
-    """Placeholder output — replaced by the real pipeline in Phase 3.
-
-    Returns a deliberately abstaining verdict rather than a confident one:
-    a stub that claims certainty is the exact failure this project exists to
-    prevent, and it would make the UI look right while being wrong.
-    """
-    preview = state.raw_message.strip()
-    claim_text = (preview[:120] + "…") if len(preview) > 120 else preview
-
-    claim = Claim(
-        id="c1",
-        text=claim_text,
-        source_span=claim_text,
-        status_type=StatusType.UNKNOWN,
-        domain=Domain.UNKNOWN,
-        jurisdiction=Jurisdiction.UNKNOWN,
-        verdict=Verdict.INSUFFICIENT,
-        confidence=0.1,
-        key_reason=(
-            "Backend skeleton is live but the verification pipeline is not "
-            "implemented yet (Phase 3)."
-        ),
-        evidence_ids=[],
-        grades=[
-            EvidenceGrade(
-                evidence_id="none",
-                label=GradeLabel.DOES_NOT_ANSWER,
-                rationale="No retrieval has run.",
-                score=0.0,
-            )
-        ],
-    )
+    if not state.claims:
+        # Nothing checkable survived decomposition — say so rather than
+        # inventing a verdict about a message with no verifiable content.
+        return VerifyResponse(
+            overall_verdict="Insufficient evidence",
+            summary=(
+                "No checkable factual claims were found in this message. "
+                "ForwardCheck verifies statements about the status of events, "
+                "such as charges, recalls, or policy changes."
+            ),
+            confidence=0.2,
+            claims=[],
+            evidence=[],
+            timeline=[],
+            shareable_correction=(
+                "I ran this through a checker — there's no specific factual "
+                "claim in it to verify."
+            ),
+            pipeline_trace=state.trace,
+        )
 
     return VerifyResponse(
-        overall_verdict=Verdict.INSUFFICIENT,
-        summary=(
-            "The API is connected, but claim extraction and evidence retrieval "
-            "are not implemented yet. No verdict can be given."
-        ),
-        confidence=0.1,
-        claims=[claim],
-        evidence=[],
-        timeline=[
-            TimelineEntry(
-                stage=StatusType.UNKNOWN,
-                label="Pipeline not implemented",
-                date=None,
-                found=False,
-                description="Status timeline is constructed in Phase 3.",
-                evidence_ids=[],
-            )
-        ],
-        shareable_correction=(
-            "ForwardCheck could not verify this message — the verification "
-            "pipeline is still being built. Please do not treat this as a result."
-        ),
+        overall_verdict=state.overall_verdict,
+        summary=state.summary,
+        confidence=state.confidence,
+        last_checked=datetime.now(timezone.utc).isoformat(),
+        claims=state.claims,
+        evidence=state.evidence,
+        timeline=state.timeline,
+        shareable_correction=state.shareable_correction,
         pipeline_trace=state.trace,
     )

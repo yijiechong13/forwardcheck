@@ -35,7 +35,10 @@ class PipelineState:
     normalised_message: str = ""
     normalisation_notes: dict = field(default_factory=dict)
 
-    # decompose -> route -> retrieve -> grade -> verdict
+    # decompose: (claim_text, source_sentence) pairs, before classification
+    claim_drafts: list[tuple[str, str]] = field(default_factory=list)
+
+    # route -> retrieve -> grade -> verdict
     claims: list[Claim] = field(default_factory=list)
 
     # retrieve: claim_id -> [(evidence, score)]
