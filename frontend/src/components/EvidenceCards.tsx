@@ -32,6 +32,7 @@ export function EvidenceCards({
             <TierPips tier={doc.tier} />
             <div className="flex items-center gap-1.5">
               {doc.isMock ? <Pill>SAMPLE</Pill> : null}
+              {!doc.isMock && !doc.fromFullPage ? <Pill>SNIPPET ONLY</Pill> : null}
               <Pill>{doc.id}</Pill>
             </div>
           </div>
@@ -39,8 +40,16 @@ export function EvidenceCards({
           <div className="flex-1 px-4 py-3.5">
             <h3 className="text-[13px] font-semibold leading-snug text-fg">{doc.title}</h3>
             <p className="mt-1 text-[11px] text-fg-muted">
-              {doc.publisher} · {doc.jurisdiction} · {formatDate(doc.publishedAt)}
+              {doc.publisher} · {doc.jurisdiction} ·{" "}
+              {doc.publishedAt ? formatDate(doc.publishedAt) : "date not stated"}
             </p>
+
+            {!doc.isMock && !doc.fromFullPage ? (
+              <p className="mt-2 border-l-2 border-dashed border-edge-strong pl-2 text-[11px] leading-snug text-fg-muted">
+                The page could not be fetched, so only the search snippet was
+                available. Treated as weaker evidence.
+              </p>
+            ) : null}
 
             <blockquote className="mt-3 border-l-2 border-edge-strong pl-3 text-[12px] leading-relaxed text-fg-muted">
               {doc.snippet}
@@ -74,7 +83,22 @@ export function EvidenceCards({
           )}
 
           <div className="border-t border-edge px-4 py-2">
-            <span className="break-all font-mono text-[10px] text-fg-subtle">{doc.url}</span>
+            {doc.isMock ? (
+              // Seeded evidence uses placeholder URLs — never render them as
+              // links, so a sample citation can never be mistaken for a real one.
+              <span className="break-all font-mono text-[10px] text-fg-subtle">
+                {doc.url}
+              </span>
+            ) : (
+              <a
+                href={doc.url}
+                target="_blank"
+                rel="noopener noreferrer nofollow"
+                className="break-all font-mono text-[10px] text-fg-muted underline decoration-dotted underline-offset-2 transition hover:text-fg"
+              >
+                {doc.url}
+              </a>
+            )}
           </div>
         </article>
       ))}

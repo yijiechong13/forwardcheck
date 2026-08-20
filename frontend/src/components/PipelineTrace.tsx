@@ -15,6 +15,20 @@ export function PipelineTrace({ trace }: { trace: PipelineStep[] }) {
   const [openStep, setOpenStep] = useState<number | null>(null);
   const totalMs = trace.reduce((sum, step) => sum + step.durationMs, 0);
 
+  // The usage node carries the safe per-request cost summary (call counts and
+  // token counts only — never prompts or credentials).
+  const usage = trace.find((step) => step.node === "usage")?.details as
+    | {
+        mode?: string;
+        llmCalls?: number;
+        searches?: number;
+        fetches?: number;
+        inputTokens?: number;
+        outputTokens?: number;
+        cacheHits?: number;
+      }
+    | undefined;
+
   return (
     <div className="rounded-lg border border-edge bg-bg-raised">
       <button
@@ -41,6 +55,38 @@ export function PipelineTrace({ trace }: { trace: PipelineStep[] }) {
 
       {open ? (
         <div className="border-t border-edge px-4 py-4">
+          {usage ? (
+            <div className="mb-4 rounded-md border border-edge bg-bg px-3 py-2.5">
+              <div className="mb-1.5 font-mono text-[10px] tracking-[0.16em] text-fg-subtle">
+                REQUEST USAGE
+              </div>
+              <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-fg-muted">
+                <span className="tnum">
+                  mode <strong className="font-semibold text-fg">{usage.mode ?? "—"}</strong>
+                </span>
+                <span className="tnum">
+                  LLM calls <strong className="font-semibold text-fg">{usage.llmCalls ?? 0}</strong>
+                </span>
+                <span className="tnum">
+                  searches <strong className="font-semibold text-fg">{usage.searches ?? 0}</strong>
+                </span>
+                <span className="tnum">
+                  fetches <strong className="font-semibold text-fg">{usage.fetches ?? 0}</strong>
+                </span>
+                <span className="tnum">
+                  cache hits <strong className="font-semibold text-fg">{usage.cacheHits ?? 0}</strong>
+                </span>
+                {usage.inputTokens || usage.outputTokens ? (
+                  <span className="tnum">
+                    tokens{" "}
+                    <strong className="font-semibold text-fg">
+                      {usage.inputTokens ?? 0} in / {usage.outputTokens ?? 0} out
+                    </strong>
+                  </span>
+                ) : null}
+              </div>
+            </div>
+          ) : null}
           <ol className="space-y-2">
             {trace.map((step) => {
               const isOpen = openStep === step.step;

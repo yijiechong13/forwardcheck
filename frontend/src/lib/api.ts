@@ -4,7 +4,7 @@
  * The backend serialises with camelCase aliases matching `types.ts`, so the
  * response is used directly with no mapping layer.
  */
-import type { VerifyRequest, VerifyResponse } from "./types";
+import type { HealthResponse, VerifyRequest, VerifyResponse } from "./types";
 
 const API_BASE =
   process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
@@ -63,11 +63,16 @@ async function readErrorDetail(response: Response): Promise<string> {
   return `Verification failed (HTTP ${response.status}).`;
 }
 
-export async function checkHealth(): Promise<boolean> {
+/**
+ * Backend health and mode. Returns null when the API is unreachable, which the
+ * UI renders as "API offline" rather than as a verification failure.
+ */
+export async function fetchHealth(): Promise<HealthResponse | null> {
   try {
     const response = await fetch(`${API_BASE}/health`);
-    return response.ok;
+    if (!response.ok) return null;
+    return (await response.json()) as HealthResponse;
   } catch {
-    return false;
+    return null;
   }
 }

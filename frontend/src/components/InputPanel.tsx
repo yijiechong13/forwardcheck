@@ -1,20 +1,51 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { EXAMPLE_CLAIMS } from "@/lib/examples";
 
 const MAX_CHARS = 4000;
+
+/**
+ * Staged progress labels. The live pipeline runs decomposition, then
+ * retrieval, then grading, and each takes seconds — a single spinner makes a
+ * working request look hung. These advance on a timer rather than from server
+ * events: honest about ordering, and it costs nothing extra.
+ */
+const STAGES = [
+  "Extracting claims",
+  "Searching sources",
+  "Reading pages",
+  "Grading evidence",
+];
 
 export function InputPanel({
   onVerify,
   isLoading,
   error,
+  isLive = false,
 }: {
   onVerify: (message: string) => void;
   isLoading: boolean;
   error?: string | null;
+  isLive?: boolean;
 }) {
   const [message, setMessage] = useState("");
+  const [stage, setStage] = useState(0);
+
+  useEffect(() => {
+    if (!isLoading) return;
+    // Hold on the final stage rather than looping, so a slow request does not
+    // appear to restart. The counter is reset on cleanup rather than in the
+    // effect body, which avoids a synchronous setState during render.
+    const timer = setInterval(
+      () => setStage((s) => Math.min(s + 1, STAGES.length - 1)),
+      isLive ? 2600 : 400,
+    );
+    return () => {
+      clearInterval(timer);
+      setStage(0);
+    };
+  }, [isLoading, isLive]);
   const trimmed = message.trim();
   const canSubmit = trimmed.length >= 12 && !isLoading;
 
@@ -88,8 +119,9 @@ export function InputPanel({
 
         <div className="mt-4 flex items-center justify-between gap-4 border-t border-edge pt-4">
           <p className="text-[11px] leading-snug text-fg-subtle">
-            Runs a 7-step evidence pipeline against official Singapore sources.
-            Nothing is stored.
+            {isLive
+              ? "Searches live sources and grades each claim. Runs only when you submit."
+              : "Runs a 7-step evidence pipeline over seeded sample evidence. Nothing is stored."}
           </p>
           <button
             type="button"
@@ -104,7 +136,7 @@ export function InputPanel({
                   className="h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent"
                   aria-hidden
                 />
-                Verifying
+                {STAGES[stage]}
               </>
             ) : (
               <>

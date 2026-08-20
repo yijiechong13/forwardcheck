@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
+from app.config import settings
 from app.models.schemas import VerifyResponse
 from app.pipeline.decompose import decompose
 from app.pipeline.freshness import freshness
@@ -42,6 +43,13 @@ def run_pipeline(message: str) -> PipelineState:
 
 
 def run_verification(message: str) -> VerifyResponse:
+    # Mode dispatch: live mode runs the retrieval-grounded pipeline; mock mode
+    # (the default) runs the deterministic pipeline over the seeded corpus.
+    if settings.is_live:
+        from app.pipeline.live import run_live_verification
+
+        return run_live_verification(message)
+
     state = run_pipeline(message)
 
     if not state.claims:

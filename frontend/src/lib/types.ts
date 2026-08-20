@@ -103,8 +103,13 @@ export interface Evidence {
   url: string;
   snippet: string;
   statusAsserted: StatusType;
-  /** Always true in MVP. Bundled evidence is hand-written sample data. */
+  /** True for seeded sample documents, false for live-retrieved evidence. */
   isMock: boolean;
+  /**
+   * False when the page fetch failed and only the search snippet was
+   * available. Such evidence is weaker and is marked as such in the UI.
+   */
+  fromFullPage: boolean;
   supportsClaimIds: string[];
   refutesClaimIds: string[];
 }
@@ -117,6 +122,18 @@ export interface TimelineEntry {
   found: boolean;
   description: string;
   evidenceIds: string[];
+}
+
+/** Safe per-request usage summary from the pipeline trace. No prompts, no keys. */
+export interface UsageSummary {
+  mode: string;
+  llmCalls: number;
+  searches: number;
+  fetches: number;
+  inputTokens: number;
+  outputTokens: number;
+  cacheHits: number;
+  decisions: string[];
 }
 
 export interface PipelineStep {
@@ -137,8 +154,18 @@ export interface VerifyResponse {
   timeline: TimelineEntry[];
   shareableCorrection: string;
   pipelineTrace: PipelineStep[];
-  /** Banner text reminding the user that evidence is seeded sample data. */
+  /** Banner text for seeded sample data. Empty string in live mode. */
   mockNotice: string;
+}
+
+/** GET /health — drives the mode badge and configuration warnings. */
+export interface HealthResponse {
+  status: "ok" | "misconfigured";
+  mode: "mock" | "live";
+  live: boolean;
+  providersConfigured: { anthropic: boolean; tavily: boolean };
+  model: string | null;
+  problems: string[];
 }
 
 export interface VerifyRequest {

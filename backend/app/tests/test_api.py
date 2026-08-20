@@ -21,7 +21,17 @@ def test_health_reports_mock_mode():
     assert response.status_code == 200
     body = response.json()
     assert body["status"] == "ok"
-    assert body["adapters"]["llm"] == "mock"
+    assert body["mode"] == "mock"
+    assert body["live"] is False
+
+
+def test_health_never_leaks_key_material():
+    """Provider status must be booleans, never values."""
+    body = client.get("/health").json()
+    text = str(body)
+    for provider, configured in body["providersConfigured"].items():
+        assert isinstance(configured, bool)
+    assert "sk-" not in text and "tvly-" not in text
 
 
 def test_verify_returns_full_contract():

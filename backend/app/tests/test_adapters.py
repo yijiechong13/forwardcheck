@@ -28,23 +28,25 @@ def test_defaults_require_no_api_keys():
     assert isinstance(get_search_adapter(), MockSearchAdapter)
 
 
-def test_llm_classify_returns_a_label_from_the_closed_set():
+def test_mock_llm_adapter_refuses_to_impersonate_the_llm():
+    """Mock mode never consults an LLM adapter. If a refactor routes the live
+    pipeline to the mock adapter, it must fail loudly rather than produce
+    rule-based output labelled as LLM-backed."""
+    from app.services.llm_adapter import LLMError
+    from app.services.usage import UsageMeter
+
     adapter = MockLLMAdapter()
-    labels = ["charge", "conviction", "sentence"]
-    result = adapter.classify(
-        "He was convicted in court", labels, instruction="pick the status"
-    )
-    assert result in labels
-
-
-def test_llm_classify_rejects_an_empty_label_set():
-    with pytest.raises(ValueError):
-        MockLLMAdapter().classify("text", [], instruction="pick")
+    with pytest.raises(LLMError):
+        adapter.decompose("some message", UsageMeter())
+    with pytest.raises(LLMError):
+        adapter.grade("some prompt", UsageMeter())
 
 
 def test_search_returns_nothing_rather_than_inventing_results():
     """An empty result is what keeps 'Insufficient evidence' honest."""
-    assert MockSearchAdapter().search("cat licensing singapore") == []
+    from app.services.usage import UsageMeter
+
+    assert MockSearchAdapter().search("cat licensing singapore", UsageMeter()) == []
     assert MockSearchAdapter().is_live is False
 
 

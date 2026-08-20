@@ -1,53 +1,56 @@
 """LLM adapter.
 
-The pipeline never imports an SDK directly. It asks this interface for two
-things — a classification and a short generation — and the deterministic
-implementation answers both without a network call or an API key.
+The pipeline never imports the Anthropic SDK directly. It asks this interface
+for two bounded, structured operations — claim decomposition and evidence
+grading — and validated Pydantic objects come back. Prose generation for the
+user-facing summary stays in deterministic code; the LLM never decides a
+verdict, only the evidence relationships the deterministic aggregator consumes.
 
-Why the interface is shaped this way:
+Cost discipline lives here:
+  * Every call charges the per-request UsageMeter first (hard cap).
+  * Decomposition plans search queries in the same call (1 call, 2 jobs).
+  * Grading batches every (claim, passage) pair into one call per round.
+  * One bounded retry, only for transient 429/5xx, with backoff.
+  * Auth/permission/quota errors are never retried.
+  * Token usage is recorded from the response's usage block.
 
-  * `classify()` returns a label from a **caller-supplied closed set**. An LLM
-    that can return arbitrary text cannot be evaluated, and it cannot be swapped
-    for rules. Constraining the output at the interface means the mock and the
-    real implementation are interchangeable by construction.
-  * `complete()` is only used for *prose*, never for verdicts. Verdicts come
-    from `verdict.py`, which is deterministic and testable. Keeping generation
-    away from the decision is what stops the system from talking itself into an
-    answer the evidence does not support.
-
-TODO(anthropic): implement AnthropicLLMAdapter.
-  - pip install anthropic; client = Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
-  - model: "claude-sonnet-5" for grading, "claude-haiku-4-5-20251001" for
-    cheap classification calls
-  - classify(): pass `labels` as a tool schema with an enum so the model
-    cannot return anything outside the closed set, rather than parsing prose
-  - complete(): use for claim decomposition and grade rationales, never for
-    the verdict itself
-  - always pass the evidence snippets in the prompt and instruct the model to
-    answer only from them; the point of RAG is that the model does not rely
-    on parametric memory for facts about a live case
-  - compare against the deterministic baseline on the Phase 5 eval harness
-    before making it the default (see EVAL_PLAN.md)
+Key handling: the SDK reads ANTHROPIC_API_KEY from the environment itself.
+This module never touches, logs, or stores the value.
 """
 
 from __future__ import annotations
 
-import re
+import logging
+import time
 from abc import ABC, abstractmethod
 
 from app.config import settings
+from app.models.llm_schemas import DecompositionResult, GradingResult
+from app.services.usage import UsageMeter
+
+logger = logging.getLogger("forwardcheck.llm")
+
+
+class LLMError(Exception):
+    """A provider call failed in a way the pipeline should handle gracefully.
+
+    `kind` is a stable, safe-to-display category; the original provider
+    message is logged server-side but never sent to the client.
+    """
+
+    def __init__(self, kind: str, detail: str = "") -> None:
+        self.kind = kind
+        super().__init__(f"llm error: {kind}" + (f" ({detail})" if detail else ""))
 
 
 class LLMAdapter(ABC):
-    """Bounded LLM operations used by the pipeline."""
+    @abstractmethod
+    def decompose(self, message: str, meter: UsageMeter) -> DecompositionResult: ...
 
     @abstractmethod
-    def classify(self, text: str, labels: list[str], *, instruction: str) -> str:
-        """Return exactly one label from `labels`."""
-
-    @abstractmethod
-    def complete(self, prompt: str, *, max_tokens: int = 300) -> str:
-        """Free-text generation. Prose only — never used to decide a verdict."""
+    def grade(
+        self, pairs_prompt: str, meter: UsageMeter
+    ) -> GradingResult: ...
 
     @property
     @abstractmethod
@@ -55,77 +58,161 @@ class LLMAdapter(ABC):
 
 
 class MockLLMAdapter(LLMAdapter):
-    """Deterministic stand-in.
+    """Raises if the live pipeline ever reaches it.
 
-    Not a stub that returns fixed strings: it does real (if simple) work, by
-    scoring keyword overlap between the text and each candidate label. That
-    makes it a genuine baseline for the eval harness rather than a placeholder,
-    and it means the pipeline behaves identically whether or not a key is set.
+    Mock *mode* uses the deterministic pipeline and never consults an LLM
+    adapter, so this class existing at all is a guard: if a refactor routes
+    the live pipeline here, tests fail loudly instead of producing silent
+    rule-based output labelled as LLM-backed.
     """
 
     @property
     def name(self) -> str:
         return "mock"
 
-    def classify(self, text: str, labels: list[str], *, instruction: str) -> str:
-        if not labels:
-            raise ValueError("classify() requires a non-empty label set")
+    def decompose(self, message: str, meter: UsageMeter) -> DecompositionResult:
+        raise LLMError("mock_mode", "mock mode uses the deterministic pipeline")
 
-        tokens = set(re.findall(r"[a-z]+", text.lower()))
-        best_label, best_score = labels[0], -1.0
-
-        for label in labels:
-            label_tokens = set(re.findall(r"[a-z]+", label.lower().replace("_", " ")))
-            if not label_tokens:
-                continue
-            overlap = len(tokens & label_tokens) / len(label_tokens)
-            if overlap > best_score:
-                best_label, best_score = label, overlap
-
-        return best_label
-
-    def complete(self, prompt: str, *, max_tokens: int = 300) -> str:
-        # Deliberately inert. Any prose the MVP shows a user is written by
-        # `verdict.py` from the actual grades, so a mock that invented text
-        # here would only be able to make the output less accurate.
-        return ""
+    def grade(self, pairs_prompt: str, meter: UsageMeter) -> GradingResult:
+        raise LLMError("mock_mode", "mock mode uses the deterministic pipeline")
 
 
-class AnthropicLLMAdapter(LLMAdapter):  # pragma: no cover
-    """Placeholder for the Anthropic Messages API implementation."""
+DECOMPOSE_SYSTEM = """You extract independently verifiable factual claims from forwarded messages \
+circulating in Singapore group chats, and plan targeted search queries for each claim.
 
-    def __init__(self, api_key: str, model: str = "claude-sonnet-5") -> None:
-        self._api_key = api_key
-        self._model = model
+Rules:
+- At most {max_claims} claims. Merge fragments that cannot be verified independently; \
+split assertions that can have different truth values (a real deadline vs an invented penalty).
+- source_span must be an EXACT substring of the message.
+- Preserve exact amounts, dates, and modality words (automatic, must, may, up to, all) in claim_text.
+- Do not turn opinions, questions, or forwarding appeals ("share this", "forward to everyone") \
+into claims; list them in non_factual_content instead.
+- searchable=false (with a reason) for claims that cannot be checked against public sources.
+- search_queries: 1-2 short, targeted queries per searchable claim. Prefer official Singapore \
+sources with site: operators (site:gov.sg, site:nparks.gov.sg, site:sso.agc.gov.sg, \
+site:hsa.gov.sg, site:sfa.gov.sg, site:mom.gov.sg, site:moh.gov.sg) for the first query, \
+and an unrestricted Singapore-scoped query second. Keep exact organisation names, amounts, \
+dates, product names, and status words in the query."""
+
+GRADE_SYSTEM = """You grade evidence passages against factual claims. For each (claim, evidence) \
+pair listed, output one grade item with the exact claim_id and evidence_id given.
+
+Rules:
+- Use ONLY the evidence text provided. Do not use your own knowledge of events; if the passage \
+does not address the claim, the relationship is does_not_answer — absence is not contradiction.
+- Check explicitly: entity/subject, jurisdiction, date, amount, legal or policy status, scope \
+(all vs some, household vs individual, batch vs product line), modality ("up to X on conviction" \
+does NOT support "automatically fined X"), eligibility, and whether the evidence is current.
+- A passage that bounds a fact (specific batches, per household, maximum penalty) REFUTES a \
+claim that unbounds it (all products, every person, automatic penalty) — grade it refutes, \
+with the mismatch in contradicted_aspects.
+- quoted_span must be a short exact excerpt from the evidence passage.
+- temporal_status: "outdated" if the passage shows the situation has since changed or the \
+document is clearly superseded; "current" if clearly current; otherwise "unclear".
+- For any claim where evidence overall is insufficient or conflicting, add ONE refined search \
+query to refined_queries keyed by claim_id."""
+
+
+class AnthropicLLMAdapter(LLMAdapter):
+    """Anthropic Messages API with SDK-validated structured output."""
+
+    #: HTTP statuses worth exactly one retry. Everything else fails fast.
+    _TRANSIENT = {429, 500, 502, 503, 504, 529}
+
+    def __init__(self, model: str | None = None) -> None:
+        import anthropic
+
+        # No api_key argument: the SDK resolves credentials from the
+        # environment itself, so the value never passes through our code.
+        self._client = anthropic.Anthropic(
+            timeout=settings.request_timeout_seconds,
+            max_retries=0,  # retry policy is ours, bounded and logged
+        )
+        self._model = model or settings.anthropic_model
+        self._anthropic = anthropic
 
     @property
     def name(self) -> str:
         return f"anthropic:{self._model}"
 
-    def classify(self, text: str, labels: list[str], *, instruction: str) -> str:
-        raise NotImplementedError(
-            "Anthropic adapter is not implemented. Run with FORWARDCHECK_LLM=mock "
-            "(the default) — no API key is required."
-        )
+    # ------------------------------------------------------------------ core
 
-    def complete(self, prompt: str, *, max_tokens: int = 300) -> str:
-        raise NotImplementedError(
-            "Anthropic adapter is not implemented. Run with FORWARDCHECK_LLM=mock "
-            "(the default) — no API key is required."
+    def _parse_call(self, *, system: str, user: str, output_format, meter: UsageMeter):
+        """One structured call with budget charge, bounded retry, and metering."""
+        meter.charge_llm_call()
+        attempts = 0
+        while True:
+            attempts += 1
+            try:
+                response = self._client.messages.parse(
+                    model=self._model,
+                    max_tokens=4096,
+                    system=system,
+                    messages=[{"role": "user", "content": user}],
+                    output_format=output_format,
+                )
+                meter.record_tokens(
+                    getattr(response.usage, "input_tokens", None),
+                    getattr(response.usage, "output_tokens", None),
+                )
+                return response.parsed_output
+            except self._anthropic.AuthenticationError as exc:
+                logger.error("anthropic auth error (not retried)")
+                raise LLMError("auth") from exc
+            except self._anthropic.PermissionDeniedError as exc:
+                logger.error("anthropic permission error (not retried)")
+                raise LLMError("permission") from exc
+            except self._anthropic.APIStatusError as exc:
+                status = exc.status_code
+                if status in self._TRANSIENT and attempts == 1:
+                    # One bounded retry with backoff for transient failures.
+                    delay = 2.0 if status == 429 else 1.0
+                    logger.warning("anthropic %s; retrying once in %.0fs", status, delay)
+                    time.sleep(delay)
+                    continue
+                kind = "rate_limit" if status == 429 else "provider"
+                logger.error("anthropic status %s (giving up)", status)
+                raise LLMError(kind, f"status {status}") from exc
+            except self._anthropic.APIConnectionError as exc:
+                if attempts == 1:
+                    time.sleep(1.0)
+                    continue
+                raise LLMError("timeout") from exc
+            except Exception as exc:
+                # Includes SDK-side validation failure of the structured
+                # output. One retry gives the model a second chance to emit
+                # schema-conformant JSON; after that, fail explicitly rather
+                # than accept malformed text.
+                if attempts == 1:
+                    logger.warning("structured parse failed; retrying once")
+                    meter.record_decision("structured output failed validation; one retry")
+                    continue
+                logger.error("structured parse failed twice (giving up)")
+                raise LLMError("malformed_output") from exc
+
+    # ------------------------------------------------------------- operations
+
+    def decompose(self, message: str, meter: UsageMeter) -> DecompositionResult:
+        system = DECOMPOSE_SYSTEM.format(max_claims=settings.max_claims)
+        result: DecompositionResult = self._parse_call(
+            system=system,
+            user=f"Forwarded message:\n---\n{message}\n---",
+            output_format=DecompositionResult,
+            meter=meter,
         )
+        return result
+
+    def grade(self, pairs_prompt: str, meter: UsageMeter) -> GradingResult:
+        result: GradingResult = self._parse_call(
+            system=GRADE_SYSTEM,
+            user=pairs_prompt,
+            output_format=GradingResult,
+            meter=meter,
+        )
+        return result
 
 
 def get_llm_adapter() -> LLMAdapter:
-    if settings.llm_backend == "anthropic":  # pragma: no cover
-        import os
-
-        key = os.environ.get("ANTHROPIC_API_KEY")
-        if not key:
-            # Fail loudly rather than silently downgrading: a run that the
-            # operator believes is LLM-backed but is silently rule-based would
-            # invalidate any eval comparison drawn from it.
-            raise RuntimeError(
-                "FORWARDCHECK_LLM=anthropic but ANTHROPIC_API_KEY is not set."
-            )
-        return AnthropicLLMAdapter(key)
+    if settings.is_live:
+        return AnthropicLLMAdapter()
     return MockLLMAdapter()

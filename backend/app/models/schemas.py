@@ -97,9 +97,13 @@ class Evidence(ApiModel):
     url: str
     snippet: str
     status_asserted: StatusType
-    #: Always True in MVP. Required, not conventional, so the UI cannot
-    #: accidentally present seeded sample data as a real citation.
+    #: True for seeded sample documents, False for live-retrieved evidence.
+    #: Required, not conventional, so the UI cannot accidentally present
+    #: sample data as a real citation (or vice versa).
     is_mock: bool = True
+    #: False when the page fetch failed and only the search snippet was
+    #: available — the UI marks such evidence as weaker.
+    from_full_page: bool = True
     supports_claim_ids: list[str] = Field(default_factory=list)
     refutes_claim_ids: list[str] = Field(default_factory=list)
 

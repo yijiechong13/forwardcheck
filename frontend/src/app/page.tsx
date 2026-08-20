@@ -9,22 +9,26 @@ import { PipelineTrace } from "@/components/PipelineTrace";
 import { ShareCorrection } from "@/components/ShareCorrection";
 import { Timeline } from "@/components/Timeline";
 import { Section } from "@/components/ui";
-import { ApiError, checkHealth, verifyMessage } from "@/lib/api";
-import type { VerifyResponse } from "@/lib/types";
+import { ApiError, fetchHealth, verifyMessage } from "@/lib/api";
+import type { HealthResponse, VerifyResponse } from "@/lib/types";
 
 export default function Home() {
   const [result, setResult] = useState<VerifyResponse | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [apiUp, setApiUp] = useState<boolean | null>(null);
+  const [health, setHealth] = useState<HealthResponse | null | undefined>(undefined);
 
-  // Surface backend availability on load. A reviewer who forgot to start
-  // uvicorn should learn that from the page, not from a failed verification.
+  // Surface backend availability and mode on load. This is a plain GET; it
+  // makes no provider calls and costs nothing.
   useEffect(() => {
-    void checkHealth().then(setApiUp);
+    void fetchHealth().then(setHealth);
   }, []);
 
+  // Verification runs only on explicit submit — never on page load, and never
+  // when an example is loaded into the textarea. In live mode each run spends
+  // provider budget, so it must be a deliberate action.
   async function handleVerify(message: string) {
+    if (isLoading) return; // guard against double submission
     setIsLoading(true);
     setError(null);
     try {
@@ -43,11 +47,16 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-bg">
-      <Header apiUp={apiUp} />
+      <Header health={health} />
 
       <main className="mx-auto max-w-5xl px-5 pb-24 sm:px-8">
         <div className="py-8">
-          <InputPanel onVerify={handleVerify} isLoading={isLoading} error={error} />
+          <InputPanel
+            onVerify={handleVerify}
+            isLoading={isLoading}
+            error={error}
+            isLive={health?.live ?? false}
+          />
         </div>
 
         {result ? (
@@ -105,7 +114,7 @@ export default function Home() {
               <PipelineTrace trace={result.pipelineTrace} />
             </Section>
 
-            <MockNotice notice={result.mockNotice} />
+            {result.mockNotice ? <MockNotice notice={result.mockNotice} /> : null}
           </div>
         ) : (
           <EmptyState />
@@ -117,7 +126,7 @@ export default function Home() {
   );
 }
 
-function Header({ apiUp }: { apiUp: boolean | null }) {
+function Header({ health }: { health: HealthResponse | null | undefined }) {
   return (
     <header className="relative overflow-hidden border-b border-edge">
       <div className="grid-bg pointer-events-none absolute inset-0" aria-hidden />
@@ -153,20 +162,55 @@ function Header({ apiUp }: { apiUp: boolean | null }) {
           <span>FINES &amp; ELIGIBILITY</span>
           <span>RECALLS</span>
           <span>LEGAL STATUS</span>
-          {apiUp === false ? (
-            <span
-              className="rounded-sm border px-1.5 py-0.5 tracking-normal"
-              style={{
-                color: "var(--verdict-false)",
-                borderColor: "var(--verdict-false)",
-              }}
-            >
-              API OFFLINE — start the backend on :8000
-            </span>
-          ) : null}
+          <ModeBadge health={health} />
         </div>
       </div>
     </header>
+  );
+}
+
+/**
+ * Mode is stated prominently: a reviewer must never mistake seeded sample
+ * evidence for live retrieval, or vice versa.
+ */
+function ModeBadge({ health }: { health: HealthResponse | null | undefined }) {
+  if (health === undefined) return null;
+
+  if (health === null) {
+    return (
+      <span
+        className="rounded-sm border px-1.5 py-0.5 tracking-normal"
+        style={{ color: "var(--verdict-false)", borderColor: "var(--verdict-false)" }}
+      >
+        API OFFLINE — start the backend on :8000
+      </span>
+    );
+  }
+
+  if (health.status === "misconfigured") {
+    return (
+      <span
+        className="rounded-sm border px-1.5 py-0.5 tracking-normal"
+        style={{ color: "var(--verdict-misleading)", borderColor: "var(--verdict-misleading)" }}
+        title={health.problems.join("; ")}
+      >
+        CONFIGURATION INCOMPLETE
+      </span>
+    );
+  }
+
+  return health.live ? (
+    <span
+      className="rounded-sm border px-1.5 py-0.5 tracking-normal"
+      style={{ color: "var(--fg)", borderColor: "var(--border-strong)" }}
+      title={health.model ? `Model: ${health.model}` : undefined}
+    >
+      LIVE VERIFICATION
+    </span>
+  ) : (
+    <span className="rounded-sm border border-dashed border-edge-strong px-1.5 py-0.5 tracking-normal">
+      DEMO MODE — SEEDED SAMPLE EVIDENCE
+    </span>
   );
 }
 
@@ -218,7 +262,7 @@ function Footer() {
           ForwardCheck SG · public-status verification for forwarded claims
         </p>
         <p className="font-mono text-[10px] tracking-wide text-fg-subtle">
-          MOCK MODE · NO API KEYS REQUIRED
+          INFORMATIONAL TOOL · CHECK THE CITED SOURCE FOR IMPORTANT DECISIONS
         </p>
       </div>
     </footer>

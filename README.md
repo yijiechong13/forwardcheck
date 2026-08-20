@@ -6,7 +6,7 @@ Paste a forwarded message. Get a verdict for every claim in it, with cited evide
 ![Backend](https://img.shields.io/badge/backend-FastAPI-informational)
 ![Frontend](https://img.shields.io/badge/frontend-Next.js%2016-informational)
 ![Python](https://img.shields.io/badge/python-3.13-blue)
-![Tests](https://img.shields.io/badge/tests-83%20passing-brightgreen)
+![Tests](https://img.shields.io/badge/tests-125%20passing-brightgreen)
 ![License](https://img.shields.io/badge/license-MIT-lightgrey)
 
 ## Overview
@@ -29,25 +29,30 @@ for reading everything below, and is stated up front rather than buried.
 
 ## What this is and is not
 
-Being precise about the current implementation:
+ForwardCheck runs in one of two modes.
 
-| | Status |
-|---|---|
-| Claim decomposition, routing, retrieval, grading, verdicts | **Implemented**, deterministic (rule-based) |
-| Evidence corpus | **38 seeded sample documents**, hand-written to resemble official advisories |
-| Retrieval | **Implemented** — BM25 lexical scoring over the in-memory corpus |
-| LLM involvement | **None.** No model is called anywhere in the pipeline |
-| Live web search / page fetching / scraping | **Not implemented** — interface defined, raises `NotImplementedError` |
-| Vector database, embeddings, reranking | **Not implemented** |
-| Deployment | **Not deployed** — runs locally |
+| | Mock mode (default) | Live mode |
+|---|---|---|
+| Claim decomposition | Deterministic rules | Anthropic, structured output, with rule-based fallback |
+| Evidence | 38 seeded sample documents | Live web search + page fetching |
+| Retrieval | BM25 over an in-memory corpus | Tavily search, then lexical + heuristic ranking |
+| Grading | Deterministic rule cascade | Anthropic, one batched structured call per round |
+| Verdicts | Deterministic aggregation | Deterministic aggregation (identical rules) |
+| API keys | None required | `ANTHROPIC_API_KEY` + `TAVILY_API_KEY` |
+| Cost | $0 | Bounded per request (see [Cost controls](#cost-controls)) |
 
-The LLM and web-search adapters exist as **interfaces with documented contracts and unimplemented
-bodies**. They mark where those systems attach; they do not pretend to work. The application runs
-end-to-end with no API keys because nothing external is called.
+**Mock mode is the default and is what every test and CI run uses.** It makes no
+network calls, requires no keys, and is a genuine deterministic baseline — not a
+stub. Live mode is opt-in via `FORWARDCHECK_MODE=live`.
 
-This is a **retrieval-grounded verification pipeline** whose retrieval currently targets a curated
-local corpus. It is not a RAG system with a live index, and it is not a scam or phishing detector —
-it evaluates factual claims, not sender intent.
+In both modes the **verdict is decided by deterministic code**, never by free-form
+generation. In live mode the model's job is bounded: extract claims, plan queries,
+and judge each (claim, evidence) pair. Aggregation into the five verdict labels,
+the citation requirement, and confidence scoring all stay in Python.
+
+Not implemented, and not claimed: vector/semantic retrieval, embeddings,
+reranking models, and deployment. This is not a scam or phishing detector — it
+evaluates factual claims, not sender intent.
 
 ## The problem
 
@@ -70,36 +75,62 @@ states the actual scope and modality.
 
 ```mermaid
 flowchart TD
-    A["Forwarded message"] --> B["Normalise: strip forwarding cruft, emoji, urgency markers"]
-    B --> C["Decompose into individual factual claims"]
-    C --> D["Route: classify status type, domain, jurisdiction"]
-    D --> E["Retrieve evidence: BM25 over seeded corpus, weighted by source tier"]
-    E --> F["Grade each claim against each source"]
-    F --> G["Freshness: check evidence age, build status timeline"]
-    G --> H["Verdict per claim, then overall"]
-    H --> I["Cited results, timeline, shareable correction"]
+    A["Forwarded message"] --> B["Normalise: strip forwarding cruft and emoji"]
+    B --> C["Decompose into individual claims + plan queries"]
+    C --> D["Search authoritative Singapore sources"]
+    D --> E["Fetch pages, extract text, chunk by heading"]
+    E --> F["Rank passages per claim"]
+    F --> G["Grade each claim against each passage"]
+    G --> H{"Evidence sufficient?"}
+    H -- "Yes" --> I["Deterministic verdict aggregation"]
+    H -- "No, round remaining" --> J["Refine query"]
+    J --> D
+    H -- "No, limit reached" --> K["Insufficient evidence"]
+    I --> L["Citations, timeline, shareable correction"]
+    K --> L
 ```
 
-Each stage is a separate module in `backend/app/pipeline/`, and each appends a step to a trace
-that the UI exposes.
+1. **Normalise** — strips forwarding appeals, emoji and urgency banners. What was
+   removed is recorded, since "this message told you to forward it" is informative.
+2. **Decompose + plan** — one structured call returns atomic claims with their
+   entities, dates, amounts, status type and jurisdiction, *plus* 1–2 targeted
+   search queries each. Doing both in one call halves the request cost. Every
+   claim must quote an exact span of the original message; claims whose span is
+   not present are discarded as hallucinated extractions.
+3. **Search** — queries prefer official Singapore sources (`site:` operators on
+   gov.sg domains) with an unrestricted Singapore-scoped query as backup.
+4. **Fetch and chunk** — top results are fetched (snippets alone are too short to
+   verify a status claim), boilerplate is stripped, and text is chunked on
+   heading and paragraph boundaries with full provenance metadata attached.
+5. **Rank** — lexical relevance, multiplied by exact entity/date/amount matches,
+   source tier and freshness. Authority multiplies relevance, never substitutes
+   for it, so an irrelevant official page cannot outrank a relevant one.
+6. **Grade** — all (claim, passage) pairs in **one** structured call, returning a
+   relationship, matched/contradicted/missing aspects, temporal status, rationale
+   and an exact quoted span per pair.
+7. **Decide or refine** — a claim with no qualifying evidence, or with conflicting
+   or outdated evidence, gets **one** refined search round. Otherwise the loop
+   stops immediately. The reason for every extra round is written to the trace.
+8. **Aggregate** — deterministic rules produce the final verdicts, confidence, the
+   status timeline and the shareable correction.
 
-1. **Normalise** — removes forwarding appeals, emoji and urgency banners, and normalises date
-   references. What was removed is recorded rather than discarded, since "this message told you
-   to forward it" is itself informative.
-2. **Decompose** — splits the message into individually checkable claims. This handles elided
-   subjects (`"arrested at Changi and convicted"` → two claims), appositive scope extensions
-   (`"All cats, including community cats"` → the rule and the scope extension separately),
-   compound assertions, and causal clauses (a recall and its stated reason).
-3. **Route** — classifies each claim by status type (charge, penalty, eligibility, recall scope,
-   deadline …), domain, and jurisdiction.
-4. **Retrieve** — BM25 lexical scoring over the corpus, multiplied by a source-tier weight, with
-   a status-aware boost. Scores below an absolute floor return no results at all.
-5. **Grade** — labels each (claim, document) pair `supports`, `refutes`, `partially_supports`
-   or `does_not_answer`.
-6. **Freshness** — flags evidence older than a configurable threshold and constructs the status
-   timeline.
-7. **Verdict** — assigns a per-claim verdict and confidence, then an overall label, and writes a
-   short correction suitable for sending back to the group.
+### Claim decomposition vs document chunking
+
+Two different operations that are easy to conflate:
+
+- **Claim decomposition** splits the *user's forwarded message* into independently
+  verifiable assertions. Semantic, done by the LLM (or rules in mock mode).
+- **Document chunking** splits a *retrieved source page* into gradeable passages.
+  Structural, done deterministically on heading and paragraph boundaries.
+
+### Why live search rather than a pre-built index
+
+Policies, advisories, recalls and deadlines change. A static document index would
+answer with whatever was true when it was built, which for this problem is the
+failure mode itself — a forwarded message is often a real announcement that has
+since been superseded. Live retrieval means the evidence is as current as the
+source. The cost is latency and per-request spend, which is why the budgets below
+are hard limits rather than guidance.
 
 ## Example
 
@@ -142,90 +173,150 @@ explicitly.
 
 ## Key features
 
-**Claim-level verification.** A message is decomposed into separate claims, each with its own
-verdict, confidence, cited evidence IDs and one-line explanation.
+**Claim-level verification.** A message becomes separate claims, each with its own
+verdict, confidence, cited evidence and explanation. One claim being true does not
+drag the others up, or down.
 
-**Three axes of overstatement.** Beyond status escalation (`investigated` → `charged`), the
-grader models *scope* (one batch → all products; per household → per person) and *modality*
-(up to $5,000 on conviction → automatically fined). These are independent — a claim can get the
-status exactly right and still be false on both other axes.
+**Three axes of overstatement.** Beyond status escalation (`investigated` →
+`charged`), grading targets *scope* (one batch → all products; per household → per
+person) and *modality* (up to $5,000 on conviction → automatically fined). These
+are independent — a claim can get the status exactly right and still be false on
+both other axes.
 
-**Bounded-source guard.** A source that bounds a fact ("three specified batches") never *supports*
-a claim that unbounds it ("all milk powder"); it refutes it. Implemented in `pipeline/grade.py`.
+**Bounded agentic retrieval.** The pipeline decides whether to search again, and
+says why: no qualifying evidence, sources conflict, or evidence looks outdated.
+Capped at two rounds per claim and a total search budget; when limits are reached
+it abstains rather than guessing. The reason for every extra round is in the trace.
 
-**Abstention.** Claims with no qualifying evidence return `Insufficient evidence`. Every
-non-abstaining verdict must cite at least one evidence ID, and this is asserted in tests.
+**Time-aware handling.** Evidence carries publication dates; the grader returns a
+temporal status per passage; a claim supported *only* by evidence marked outdated
+returns `Outdated` rather than `Supported`.
 
-**Source-tier weighting.** Retrieval scores are multiplied by a per-tier weight
-(`primary` 1.0, `official` 0.9, `credible_news` 0.65, `secondary` 0.3) in
-`services/retrieval_adapter.py`. This is deterministic, not prompt-based.
+**Abstention as a real outcome.** No qualifying evidence means `Insufficient
+evidence`. Every non-abstaining verdict must cite at least one source, asserted in
+tests. In live mode, evidence that could only be read as a search snippet (because
+the page fetch failed) is down-weighted and labelled as such in the UI.
 
-**Time-aware handling.** Evidence carries a publication date. Documents older than
-`FORWARDCHECK_STALE_DAYS` (default 540) are flagged, and a claim supported *only* by stale
-evidence returns `Outdated` rather than `Supported`. Retrieved evidence is also arranged into a
-status timeline where stages with no supporting document are explicitly marked as not found.
+**Source-tier weighting.** Deterministic, applied at ranking time: `primary` 1.0,
+`official` 0.9, `credible_news` 0.65, `secondary` 0.3. Unknown domains are kept but
+weighted as secondary — a developing event sometimes only has news coverage — and
+can never outrank an official source.
 
-**Shareable correction.** A short, plain-language summary of what is true and what is not, sized
-for pasting back into a group chat.
+**Verified citations.** Live evidence cards link to the real fetched URL (opening
+safely in a new tab); seeded sample evidence uses placeholder URLs that are
+deliberately rendered as plain text, so a sample can never be mistaken for a
+real citation.
 
-**Pipeline trace.** Every node's inputs, outputs, retrieved evidence IDs and timings are exposed
-in the UI for inspection.
+## Cost controls
+
+Live mode spends money, so limits are enforced in code, not documentation. Every
+provider call charges a per-request meter *before* it is made, and exceeding a
+limit degrades to abstention rather than raising.
+
+| Limit | Default | Env var |
+|---|---|---|
+| Claims per message | 6 | `FORWARDCHECK_MAX_CLAIMS` |
+| LLM calls per request | 3 | `FORWARDCHECK_MAX_LLM_CALLS_PER_REQUEST` |
+| Search rounds per claim | 2 | `FORWARDCHECK_MAX_SEARCH_ROUNDS` |
+| Searches per request | 8 | `FORWARDCHECK_MAX_SEARCHES_TOTAL` |
+| Page fetches per request | 8 | `FORWARDCHECK_MAX_FETCHES_TOTAL` |
+| Sources per claim | 3 | `FORWARDCHECK_MAX_SOURCES_PER_CLAIM` |
+| Request timeout (s) | 20 | `FORWARDCHECK_REQUEST_TIMEOUT_SECONDS` |
+
+Values are validated at startup — an out-of-range limit raises rather than being
+silently clamped.
+
+Also:
+
+- **Nothing runs on page load.** Loading an example into the textarea makes no
+  request. Verification happens only on explicit submit, and double submission is
+  blocked while a request is in flight.
+- **Batched calls.** Decomposition and query planning share one call; all
+  (claim, evidence) pairs in a round are graded in one call.
+- **Smallest suitable model by default** (`claude-haiku-4-5`), configurable via
+  `ANTHROPIC_MODEL`.
+- **TTL caches** for searches, fetched pages and whole verification results, keyed
+  by provider + query + parameters, so repeated development runs do not repurchase
+  the same information. Authentication errors and malformed responses are never
+  cached.
+- **No automatic retries** on auth, permission or quota errors. Exactly one
+  bounded retry with backoff for transient 429/5xx.
+- **Usage is reported, not estimated.** The trace shows LLM calls, searches,
+  fetches, cache hits, mode and token counts when the provider returns them. No
+  dollar estimates are shown, since that would require pricing this repository
+  does not verify.
 
 ## Retrieval and verification pipeline
 
-The most technically substantive part of the repository.
+**Structured output, validated.** Every LLM interaction goes through
+`client.messages.parse(output_format=...)` against a Pydantic model, so malformed
+JSON never reaches the pipeline. On a validation failure the adapter retries once;
+if that fails it raises rather than accepting arbitrary text. Decomposition
+additionally falls back to the deterministic decomposer (disclosed in the trace)
+so a provider outage degrades quality rather than breaking the request.
 
-**Retrieval** is BM25 (`k1=1.5`, `b=0.75`) implemented directly in
-`services/retrieval_adapter.py` over 38 in-memory documents. Title and asserted status are
-weighted by repetition. Three details do the real work:
+**Search.** Tavily, behind the existing `SearchAdapter` interface. Each result is
+normalised to title, canonical URL, publisher, snippet, publication date (when
+available), provider relevance score, and the query that produced it.
 
-- **Absolute score floor.** Normalising scores relative to the best hit makes the top result
-  score 1.0 even when nothing matched. A raw-score floor is applied *before* normalisation, and
-  results are damped when the best raw score is weak. Without this, an unrelated query returns
-  confident, irrelevant "evidence".
-- **Message-level context.** Individual claims are short and share vocabulary across topics. Each
-  query is augmented with distinctive terms from the whole message, and the dominant topic cluster
-  is resolved once from the full message and used to bias (not filter) per-claim results.
-- **Guaranteed inclusion.** The top exact-status match is retained even if outranked, since the
-  statute defining a penalty is often the only document that can distinguish "maximum" from
-  "automatic".
+**Fetching is treated as untrusted input**, because the URLs come from an external
+provider. `http`/`https` only; every hostname is resolved and rejected if it maps
+to private, loopback, link-local, multicast or reserved space; redirects are
+re-validated at each hop (a redirect into internal space is a classic SSRF pivot);
+size, timeout, redirect count and content type are all capped. Login walls and
+paywalls are not bypassed — a failed fetch keeps the search snippet as explicitly
+weaker evidence.
 
-**Grading** is a priority-ordered rule cascade in `pipeline/grade.py`: explicit negation →
-substance denial → scope/modality mismatch → out-of-scope subject → status-rung comparison →
-lexical fallback. A document that does not clearly address a claim grades `does_not_answer`;
-silence is never read as agreement.
+**Extraction** is a dependency-free HTML-to-text pass that skips
+nav/header/footer/aside/script and preserves headings as structural markers. It is
+not a readability engine; Singapore government advisory pages are structurally
+simple, which is what makes this adequate.
 
-**Source-quality handling** operates at two levels. Retrieval-time tier weighting is deterministic
-and always applied. A separate domain allowlist in `services/search_adapter.py` maps Singapore
-government, statutory-board and established-news domains to tiers — this is defined and unit-tested
-but is only used by the unimplemented live-search path.
+**Ranking is lexical and heuristic — not semantic.** There are no embeddings in
+this repository. Signals: token overlap, exact entity/date/amount matches, source
+tier, freshness, and a penalty for snippet-only evidence. Materially duplicate
+passages are deduplicated by content fingerprint.
 
-**Why a local corpus.** Policies, advisories and recalls change, which is a strong argument for
-live retrieval, and the architecture is built to accept it. The current MVP deliberately uses a
-seeded corpus so the pipeline can be evaluated against known-correct labels — the corpus is
-constructed so that several demo messages *cannot* be fully answered, which is what makes
-abstention testable.
+**Grading** instructs the model to use only the supplied passages, to treat
+silence as `does_not_answer` rather than contradiction, and to check subject,
+jurisdiction, date, amount, status, scope, modality, eligibility and currency
+explicitly. Grades naming a (claim, evidence) pair the pipeline never created are
+discarded — the model cannot invent citations.
+
+**Aggregation is deterministic.** Confidence combines evidence agreement, source
+tier and retrieval strength; the model's self-reported confidence is one input,
+never the whole score. A partially-true claim contradicted on scope, modality or
+date resolves to `Misleading`; `False` is reserved for direct substantive
+contradiction.
 
 ## Architecture
 
 ```
 Next.js (App Router)  ──POST /verify──▶  FastAPI
                                             │
-                                    PipelineState
-                                            │
-      normalise → decompose → route → retrieve → grade → freshness → verdict
-                                            │
-                           Adapters (env-selected, mock by default)
-                           LLM · Retrieval · Search
+                            mode = mock ─────┴───── mode = live
+                                 │                       │
+                    deterministic pipeline      live orchestrator
+                    over seeded corpus          (app/pipeline/live.py)
+                                                         │
+                              ┌──────────────────────────┼──────────────────┐
+                              ▼                          ▼                  ▼
+                      Anthropic adapter          Tavily adapter      Fetch + chunk
+                   (structured decompose,     (search, TTL-cached)   (SSRF-guarded,
+                    batched grading)                                 TTL-cached)
+                              └──────────────────────────┼──────────────────┘
+                                                         ▼
+                                        deterministic verdict aggregation
 ```
 
-`pipeline/graph.py` is a small, hand-written state-graph runner: nodes are `(state) -> state`
-functions registered on a graph, with automatic trace capture. It is deliberately shaped like
-LangGraph so that migrating is mechanical, but LangGraph is **not** a dependency.
+Both modes return the same `VerifyResponse` shape, so the frontend renders either
+without branching — apart from deliberately showing mode, real-vs-sample citations
+and snippet-only evidence differently.
 
-Adapters are selected by environment variable and default to mock. Selecting a non-mock backend
-without its key raises at startup rather than silently downgrading, so a run cannot be believed to
-be LLM-backed while quietly being rule-based.
+`pipeline/graph.py` remains the deterministic pipeline's state-graph runner. The
+live path is a separate orchestrator because its control flow is conditional and
+budget-aware, which the linear graph was not designed for. LangGraph is not a
+dependency.
 
 ## Tech stack
 
@@ -233,56 +324,57 @@ be LLM-backed while quietly being rule-based.
 |---|---|
 | Frontend | Next.js 16 (App Router), React 19, TypeScript, Tailwind CSS v4 |
 | Backend | FastAPI, Pydantic v2, Python 3.13, Uvicorn |
-| Pipeline | Custom state-graph runner (no external orchestration library) |
-| Retrieval | BM25 implemented in-repo, over an in-memory document store |
-| LLM | None currently invoked; adapter interface defined for Anthropic |
-| Storage | None — no database, no cache, no persistence |
-| Testing | pytest (83 tests), custom evaluation harness |
-| Deployment | Not deployed; local development only |
+| LLM | Anthropic Messages API via the official `anthropic` SDK, structured outputs validated with Pydantic |
+| Search | Tavily Search API via `httpx` |
+| Fetching | `httpx` + stdlib `HTMLParser`, with SSRF and size/timeout guards |
+| Retrieval | BM25 (in-repo) for the seeded corpus; lexical + heuristic ranking for live passages. No embeddings. |
+| Caching | File-based TTL cache (`backend/.cache/`), swappable behind one class |
+| Storage | No database |
+| Testing | pytest — 125 tests, all offline and free |
+| Deployment | Not deployed |
 
 ## Project structure
 
 ```
 backend/
   app/
-    main.py              FastAPI app: /verify, /health, /config
-    config.py            Env-var settings; every adapter defaults to mock
+    main.py                FastAPI: /verify, /health, /config; rate limiting,
+                           startup validation, safe error mapping
+    config.py              FORWARDCHECK_MODE, budgets, TTLs, .env loading
     models/
-      schemas.py         Pydantic request/response models, camelCase aliases
-      status.py          Status ladders, claim axes, domain mappings
+      schemas.py           API request/response models (camelCase on the wire)
+      llm_schemas.py       Pydantic schemas for every structured LLM call
+      status.py            Status ladders, claim axes, domain mappings
     pipeline/
-      graph.py           State-graph runner and PipelineState
-      normalise.py       ─┐
-      decompose.py        │
-      route.py            │  one module per pipeline node
-      retrieve.py         │
-      grade.py            │
-      freshness.py        │
-      verdict.py         ─┘
-      runner.py          Assembles and runs the graph
+      live.py              Live orchestrator: bounded agentic retrieval loop
+      chunk.py             Heading-aware document chunking with provenance
+      rank.py              Lexical + heuristic passage ranking
+      graph.py             State-graph runner for the deterministic pipeline
+      normalise.py … verdict.py   Deterministic pipeline nodes
+      runner.py            Mode dispatch
     services/
-      retrieval_adapter.py   BM25 implementation + pgvector interface stub
-      llm_adapter.py         LLM interface; Anthropic body unimplemented
-      search_adapter.py      Domain allowlist; live-search body unimplemented
-    data/
-      mock_sources.py    38 seeded evidence documents in 9 topic clusters
-    eval/harness.py      Metric scoring against the labelled dataset
-    tests/               83 tests + eval_dataset.json (10 cases, 24 claims)
-  scripts/run_eval.py    CLI evaluation report; non-zero exit on failure
+      llm_adapter.py       Anthropic adapter, structured + budget-aware
+      search_adapter.py    Tavily adapter + Singapore domain tier map
+      fetch.py             SSRF-guarded fetching and text extraction
+      cache.py             TTL cache
+      usage.py             Per-request meter and hard budget enforcement
+      retrieval_adapter.py BM25 over the seeded corpus
+    data/mock_sources.py   38 seeded sample documents, 9 topic clusters
+    eval/harness.py        Regression scoring for the deterministic pipeline
+    tests/                 125 tests (see Testing)
+  scripts/
+    run_eval.py            Mock-mode regression report
+    live_smoke.py          Opt-in paid smoke test (never run by pytest)
 
-frontend/
-  src/
-    app/page.tsx         Main page and result composition
-    components/          One component per result section
-    lib/
-      api.ts             Typed client for POST /verify
-      types.ts           Mirrors the backend schema
-      examples.ts        Seeded demo messages
+frontend/src/
+  app/page.tsx             Page composition, mode badge
+  components/              One component per result section
+  lib/{api,types}.ts       Typed client mirroring the backend schema
 ```
 
 ## Getting started
 
-**Prerequisites:** Python 3.11+ and Node.js 18+. No API keys are required.
+**Prerequisites:** Python 3.11+ and Node.js 18+.
 
 ```bash
 git clone https://github.com/yijiechong13/forwardcheck.git
@@ -308,78 +400,100 @@ npm run dev
 
 Open http://localhost:3000. Interactive API docs at http://localhost:8000/docs.
 
-### Environment variables
+This runs in **mock mode** — no keys, no network calls, no cost. The header shows
+`DEMO MODE — SEEDED SAMPLE EVIDENCE`.
 
-All optional — the application runs fully with none set. These are the names actually read by
-the code:
+### Enabling live mode
 
-```env
-# Adapter selection (default: mock for all three)
-FORWARDCHECK_LLM=mock              # mock | anthropic (anthropic unimplemented)
-FORWARDCHECK_RETRIEVAL=mock        # mock | pgvector (pgvector unimplemented)
-FORWARDCHECK_SEARCH=mock           # mock | web      (web unimplemented)
+Copy the template and fill in your own keys:
 
-# Tuning
-FORWARDCHECK_STALE_DAYS=540        # evidence older than this is flagged stale
-FORWARDCHECK_MIN_SCORE=0.28        # retrieval score floor; higher = more abstention
-FORWARDCHECK_MAX_EVIDENCE=4        # max evidence documents per claim
-FORWARDCHECK_CORS_ORIGINS=http://localhost:3000,http://127.0.0.1:3000
-
-# Only read if the corresponding adapter is switched away from mock
-ANTHROPIC_API_KEY=your_anthropic_api_key
-SEARCH_API_KEY=your_search_api_key
-DATABASE_URL=postgresql://localhost:5432/forwardcheck
-
-# Frontend
-NEXT_PUBLIC_API_BASE_URL=http://localhost:8000
+```bash
+cp backend/.env.example backend/.env
 ```
 
-### Tests and evaluation
+`backend/.env` is gitignored. Set:
+
+```env
+FORWARDCHECK_MODE=live
+ANTHROPIC_API_KEY=your_anthropic_api_key
+TAVILY_API_KEY=your_tavily_api_key
+ANTHROPIC_MODEL=claude-haiku-4-5
+```
+
+Restart the backend. `GET /health` reports whether each provider is configured
+(as booleans — key values are never returned, logged, or sent to the frontend),
+and the header switches to `LIVE VERIFICATION`. If a key is missing, the backend
+**refuses to start in live mode** rather than silently falling back to mock.
+
+All other variables are optional; see [Cost controls](#cost-controls) for the
+budget knobs and `backend/.env.example` for the complete list with defaults.
+
+### Testing
 
 ```bash
 cd backend && .venv/bin/python -m pytest app/tests -v
 ```
 
+**All 125 tests run in mock mode with mocked providers and cost nothing.** Live
+providers are never called from the test suite; one test asserts that mock-mode
+verification opens no sockets at all.
+
 ```bash
 cd backend && .venv/bin/python scripts/run_eval.py --verbose
 ```
 
-The evaluation harness scores six metrics — claim decomposition F1, routing accuracy, verdict
-accuracy, citation presence, abstention recall and escalation detection — against a labelled
-dataset of 10 messages and 24 gold claims, and exits non-zero if a target is missed or a
-*critical error* occurs (endorsing a false claim, or answering confidently where the gold label
-is abstain).
+The evaluation harness scores the *deterministic* pipeline against a labelled set
+of 10 messages and 24 gold claims. **This is regression testing, not a real-world
+accuracy estimate** — the seeded corpus was written for these cases, so a high
+score demonstrates that known behaviour has not changed. It says nothing about
+performance on unseen messages, and no accuracy claim is made from it.
 
-**These numbers are regression guards, not a generalisation estimate.** The evidence corpus was
-written for these cases, so a high score demonstrates that known behaviour has not regressed. It
-says nothing about performance on unseen messages, and should not be read as an accuracy claim.
+### Opt-in live smoke test (spends money)
+
+Never run by pytest, CI, or application startup. One verification, bounded by the
+default budgets to at most 3 LLM calls and 8 searches:
+
+```bash
+cd backend && FORWARDCHECK_MODE=live .venv/bin/python scripts/live_smoke.py --yes-spend-money
+```
+
+It refuses to run without the explicit flag, and prints verdicts, citations and
+the usage summary — never prompts or credentials.
 
 ## Limitations
 
-- **The evidence corpus is seeded sample data.** Documents are hand-written to resemble official
-  advisories, are labelled `isMock: true` throughout the API and UI, and use placeholder URLs.
-  ForwardCheck does not currently verify claims against live official sources.
-- **Grading is rule-based.** It recognises the escalation, scope and modality patterns it was
-  written to catch. Novel phrasing falls through to `does_not_answer` — deliberately, since
-  falling through to abstention is safe and falling through to support is not.
-- **Lexical retrieval is vocabulary-sensitive.** A claim phrased differently from the source
-  ("milk powder" vs "infant formula") may not match. This is the clearest argument for adding
-  dense retrieval.
-- **Cross-cluster disambiguation is heuristic.** Biasing toward the message's dominant topic works
-  because the corpus is well-separated; a production corpus would need reranking.
+- **Live results depend on what is findable.** If an authoritative page is not
+  indexed by the search provider, is behind a login, or cannot be fetched, the
+  claim may come back `Insufficient evidence` even though official information
+  exists. Abstention is the intended failure direction, but it is still a miss.
+- **A citation is not a proof.** The system shows which passage produced a grade
+  and quotes from it. It does not formally verify that the passage entails the
+  conclusion, and LLM-produced grades can be wrong.
+- **Grading quality is unmeasured on live retrieval.** The evaluation harness
+  covers the deterministic pipeline only. There is no labelled dataset of unseen
+  live verifications, so no accuracy figure is claimed for live mode.
+- **Ranking is lexical and heuristic.** A claim phrased differently from its
+  source ("milk powder" vs "infant formula") can rank the right page too low.
+  This is the clearest argument for adding dense retrieval.
+- **Extraction is simple.** Government advisory pages parse well; complex or
+  heavily scripted pages may extract poorly, in which case the search snippet is
+  used and labelled as weaker evidence.
 - **Singapore and English only.**
-- **A citation is not a proof.** The system shows which document produced a verdict; it does not
-  guarantee the document actually entails the conclusion.
+- **Rate limiting is in-process.** Suitable for single-process local use, not for
+  a multi-instance deployment.
+- **Not deployed.** Local development only.
 - **This is an informational tool.** It does not replace official guidance.
 
 ## Future improvements
 
-- Anthropic adapter for claim decomposition and grading, evaluated against the current
-  deterministic baseline on the same harness — the rules are the control
-- Live web search restricted to the existing domain allowlist
-- Dense retrieval (pgvector) combined with BM25, addressing the vocabulary-mismatch limitation
+- A labelled evaluation set of unseen forwarded messages, for genuine live-mode
+  accuracy measurement (not self-labelled by the same model)
 - Automated citation-entailment checking
-- Confidence calibration — current confidence values are uncalibrated heuristics
+- Dense retrieval to address vocabulary mismatch. A vector store would need a real
+  purpose — caching authoritative documents, searching long PDFs, or retaining
+  historical policy versions for outdated-claim detection — rather than existing
+  so the README can name one
+- Confidence calibration; current values are uncalibrated heuristics
 - OCR for forwarded screenshots
 - Additional jurisdictions and languages
 
