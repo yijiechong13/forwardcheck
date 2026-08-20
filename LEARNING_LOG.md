@@ -161,3 +161,51 @@ be tested, and abstention is the behaviour that keeps the system honest.
 - *Timeline restricted to the dominant cluster.* Found while testing: a weakly-matched document
   from the NS case was rendering "Charge ✓" on Rocky's timeline — a false confirmation sourced
   from an unrelated case, the exact error this product exists to prevent. Cheap guard, real bug.
+
+---
+
+## Phase 4 — Adapter-ready RAG structure
+
+**What was built**
+The three adapter interfaces with mock implementations, a domain allowlist for future live
+search, `.env.example`, a `/config` endpoint, and 10 adapter contract tests.
+
+**Files changed**
+`backend/app/services/{llm_adapter,search_adapter}.py`, `backend/app/tests/test_adapters.py`,
+`backend/.env.example`, `backend/app/main.py`.
+
+**What RAG concept this phase teaches**
+
+*Interfaces constrain what a model is allowed to do.* The important decision here is not that
+there is an `LLMAdapter` — it is the shape of it. `classify()` takes a caller-supplied label set
+and must return one of those labels; `complete()` is documented as prose-only and is never
+allowed to produce a verdict. Verdicts stay in `verdict.py`, which is deterministic and testable.
+
+That split is the difference between "RAG with an LLM in it" and "an LLM that sometimes reads
+documents". If generation can decide the verdict, the system can talk itself into a conclusion
+the evidence does not support — and you lose the ability to test it, because the output space is
+unbounded.
+
+*Allowlists are part of retrieval quality, not security theatre.* The verdict model rests on
+tier weighting. A general web search returns pages with no defensible tier, so admitting them
+means guessing an authority level, which corrupts every ranking downstream. Dropping
+non-allowlisted domains is the cheaper and more honest option.
+
+*Fail loudly on misconfiguration.* `FORWARDCHECK_LLM=anthropic` with no key raises rather than
+silently falling back to mock. A run the operator believes is LLM-backed but is quietly
+rule-based would invalidate any eval comparison drawn from it.
+
+**What to study next**
+- Anthropic tool-use with an enum schema — the mechanism that makes `classify()` genuinely closed
+  rather than closed-by-prompt-instruction.
+- Hybrid retrieval (RRF) for combining BM25 with pgvector, rather than replacing one with the other.
+- Prompt caching, since every grading call would resend the same evidence snippets.
+
+**Trade-offs made**
+- *Mock adapters that do real work.* `MockLLMAdapter.classify()` scores keyword overlap instead of
+  returning a constant, so it is a usable baseline for the eval harness. `MockLLMAdapter.complete()`
+  deliberately returns "" — inventing prose there could only make the output less accurate, since
+  everything user-visible is written from actual grades.
+- *Unimplemented placeholders that raise.* `AnthropicLLMAdapter` and `WebSearchAdapter` exist as
+  documented shapes with `NotImplementedError` bodies. They mark the seam and record the
+  constraints without pretending to work.

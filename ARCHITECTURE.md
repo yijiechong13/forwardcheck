@@ -73,6 +73,18 @@ FORWARDCHECK_RETRIEVAL=mock|pgvector
 FORWARDCHECK_SEARCH=mock|web
 ```
 
+Selecting a non-mock backend without its key raises at startup rather than silently
+downgrading — a run believed to be LLM-backed but quietly rule-based would invalidate any
+eval comparison drawn from it. `GET /config` reports which adapters actually served a request.
+
+### What the LLM is and is not allowed to do
+
+`LLMAdapter.classify()` takes a caller-supplied label set and must return one of those labels.
+`complete()` is prose-only. **Verdicts are never produced by generation** — they come from
+`verdict.py`, which is deterministic and testable. If generation could decide the verdict, the
+system could talk itself into a conclusion the evidence does not support, and the output space
+would be unbounded, which makes evaluation impossible.
+
 ## Key design decisions
 
 **Deterministic core, LLM as an upgrade.** The MVP's grading is rule-based. That is not a

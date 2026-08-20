@@ -49,6 +49,30 @@ def health() -> dict:
     }
 
 
+@app.get("/config")
+def config() -> dict:
+    """Effective configuration, for the dev panel and for debugging a run.
+
+    Surfaced because a verdict is only interpretable if you know which
+    adapters produced it — a rule-based run and an LLM-backed run are not
+    comparable, and the difference must never be invisible.
+    """
+    from app.services.retrieval_adapter import get_retrieval_adapter
+
+    return {
+        "adapters": {
+            "llm": settings.llm_backend,
+            "retrieval": settings.retrieval_backend,
+            "search": settings.search_backend,
+        },
+        "corpusSize": get_retrieval_adapter().corpus_size(),
+        "evidenceIsMock": True,
+        "retrievalMinScore": settings.retrieval_min_score,
+        "maxEvidencePerClaim": settings.max_evidence_per_claim,
+        "staleThresholdDays": settings.stale_threshold_days,
+    }
+
+
 @app.post("/verify", response_model=VerifyResponse, response_model_by_alias=True)
 def verify(request: VerifyRequest) -> VerifyResponse:
     """Run a forwarded message through the verification pipeline."""
