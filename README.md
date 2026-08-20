@@ -29,12 +29,26 @@ A generic fact-checker answers "true or false?" about the whole message — whic
 question, because these messages are usually *partly* true. ForwardCheck decomposes the message
 into atomic claims and gives each one its own verdict, evidence, and confidence.
 
-## Status: Phase 1 (frontend mock UI)
+## Status: Phase 2 (backend skeleton wired)
 
-The full result interface is built and running against static mock data. Backend follows in
-Phase 2; see [LEARNING_LOG.md](LEARNING_LOG.md) for the running build log.
+The UI is complete and now calls a live FastAPI backend. The verification pipeline itself lands
+in Phase 3 — until then `/verify` honestly returns `Insufficient evidence`.
+See [LEARNING_LOG.md](LEARNING_LOG.md) for the running build log.
 
-## Running the frontend
+## Running locally
+
+Two terminals. No API keys are needed — every adapter defaults to mock mode.
+
+**Backend**
+
+```bash
+cd backend
+python3 -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+uvicorn app.main:app --reload --port 8000
+```
+
+**Frontend**
 
 ```bash
 cd frontend
@@ -43,6 +57,13 @@ npm run dev
 ```
 
 Open http://localhost:3000 and load one of the three seeded examples.
+API docs are at http://localhost:8000/docs.
+
+## Tests
+
+```bash
+cd backend && .venv/bin/python -m pytest app/tests -v
+```
 
 ## Documentation
 

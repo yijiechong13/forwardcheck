@@ -71,3 +71,40 @@ not design for abstention end up avoiding it.
 - *Monochrome with desaturated verdict accents.* Restraint reads as credible for a
   verification tool; the cost is that verdicts rely on text as much as colour, so labels are
   always spelled out rather than shown as a colour alone.
+
+---
+
+## Phase 2 — FastAPI backend skeleton
+
+**What was built**
+A running API with `/health` and `/verify`, the full Pydantic schema layer, the status-ladder
+domain model, the graph abstraction, and seven contract tests. The frontend now calls the real
+endpoint instead of a static import.
+
+**Files changed**
+`backend/app/{main,config}.py`, `backend/app/models/{schemas,status}.py`,
+`backend/app/pipeline/{graph,runner}.py`, `backend/app/tests/test_api.py`,
+`backend/requirements.txt`, `frontend/src/lib/api.ts`, `frontend/src/app/page.tsx`.
+
+**What RAG concept this phase teaches**
+*State-graph pipelines.* `graph.py` is a deliberately small version of what LangGraph gives you:
+a typed state object, nodes as `(state) -> state` functions, and automatic trace capture. Writing
+it by hand makes the pattern legible — a RAG pipeline is a sequence of state transformations,
+each individually testable, not one opaque call.
+
+Also *the honest stub*. The Phase 2 placeholder returns `Insufficient evidence` with confidence
+0.1, not a plausible fake verdict. A stub that fabricates confidence makes the UI look finished
+while being exactly the failure the product exists to prevent — and it hides the gap from you.
+
+**What to study next**
+- BM25 scoring and why tier weighting is applied after relevance, not blended into it.
+- Pydantic alias generators, and where a typed contract stops errors the compiler cannot see.
+
+**Trade-offs made**
+- *Hand-rolled graph over importing LangGraph.* Zero dependencies and total legibility now;
+  we give up branching, retries, and checkpointing, which is why the abstraction keeps
+  LangGraph's shape so adopting it later is mechanical.
+- *`use_enum_values=True`.* Responses carry plain strings, so the client needs no enum decoding.
+  Cost: server-side code reads `.value` strings back out of dumped models rather than enums.
+- *Contract tests separate from verdict quality.* These tests assert shape only. Verdict accuracy
+  is deliberately deferred to the Phase 5 eval harness, so pipeline changes do not churn them.

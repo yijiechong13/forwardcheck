@@ -9,7 +9,7 @@ import { PipelineTrace } from "@/components/PipelineTrace";
 import { ShareCorrection } from "@/components/ShareCorrection";
 import { Timeline } from "@/components/Timeline";
 import { Section } from "@/components/ui";
-import { MOCK_CAT_LICENSING } from "@/lib/mockData";
+import { ApiError, verifyMessage } from "@/lib/api";
 import type { VerifyResponse } from "@/lib/types";
 
 export default function Home() {
@@ -17,15 +17,21 @@ export default function Home() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Phase 1 is UI-only: every message resolves to the same static fixture.
-  // Phase 2 swaps this for a real POST /verify call without touching the views.
   async function handleVerify(message: string) {
     setIsLoading(true);
     setError(null);
-    void message;
-    await new Promise((resolve) => setTimeout(resolve, 600));
-    setResult(MOCK_CAT_LICENSING);
-    setIsLoading(false);
+    try {
+      setResult(await verifyMessage(message));
+    } catch (err) {
+      setResult(null);
+      setError(
+        err instanceof ApiError
+          ? err.message
+          : "Something went wrong while verifying this message.",
+      );
+    } finally {
+      setIsLoading(false);
+    }
   }
 
   return (

@@ -1,9 +1,10 @@
 /**
- * Static mock verification output for Phase 1 (UI-only, no backend).
+ * A complete, hand-written `VerifyResponse` fixture.
  *
- * Phase 2 replaces this with live `POST /verify` calls, but the shape is
- * identical, so the components never change. Keeping a static fixture around
- * is also useful for UI work when the backend is not running.
+ * Phase 1 rendered the UI from this; since Phase 2 the page calls the real API.
+ * It is kept deliberately: it documents the full response shape in one readable
+ * place, and lets the UI be developed or storybooked without running uvicorn.
+ * Not imported by the app — import it in a component harness when you need it.
  */
 import type { VerifyResponse } from "./types";
 
