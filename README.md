@@ -2,6 +2,8 @@
 
 **Verify forwarded news claims before you pass them on.**
 
+[github.com/yijiechong13/forwardcheck](https://github.com/yijiechong13/forwardcheck)
+
 ForwardCheck checks forwarded WhatsApp/Telegram messages about Singapore and Malaysia
 public-interest events, using a structured, agentic RAG-style evidence pipeline.
 
