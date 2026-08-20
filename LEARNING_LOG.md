@@ -260,3 +260,39 @@ accuracy would have let the durian bug hide behind a 92% average. It is asserted
   extraction. It will drift if wording changes substantially.
 - *Targets that currently pass with headroom.* Deliberate: they are floors that catch regression,
   not stretch goals. The number that matters is critical errors at zero.
+
+---
+
+## Phase 6 — Polish
+
+**What was built**
+Rewrote the share-card corrections to state the actual correction rather than abstract status
+language, added a backend-health indicator to the header, and finished the documentation set with
+a demo script, screenshot instructions, roadmap, and stated limitations.
+
+**Files changed**
+`backend/app/pipeline/{grade,verdict}.py`, `frontend/src/app/page.tsx`, `README.md`.
+
+**What RAG concept this phase teaches**
+*The last mile is a product problem, not a retrieval problem.* The pipeline was already correct
+when this phase started — every metric passed. But the share card said "source explicitly states
+this status has not been reached", which is accurate and useless to someone in a group chat. The
+fix was a lookup table mapping each denied status to a plain-language correction: "no conviction
+has been recorded — the person has been charged but the case has not been decided".
+
+That sentence *is* the product. Everything upstream — decomposition, ladders, retrieval, grading
+— exists to be able to say it accurately. A verification system whose output nobody sends has
+verified nothing.
+
+**What to study next**
+- Calibration: whether a claimed 0.86 confidence is right 86% of the time. Currently untested,
+  and listed in the roadmap as such rather than quietly presented as meaningful.
+- Human-subject evaluation: does a correction card actually change forwarding behaviour? No
+  amount of retrieval accuracy answers that.
+
+**Trade-offs made**
+- *Hand-written rationales per status.* Clear and controllable, but a table that must be extended
+  whenever a status is added. An LLM would generalise here — this is the strongest case in the
+  codebase for `complete()`, and notably it is prose, not a verdict.
+- *Stating limitations prominently in the README.* A 100% eval score on six cases invites
+  overreading, so the README says plainly what the numbers do and do not mean.

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ClaimsTable } from "@/components/ClaimsTable";
 import { EvidenceCards } from "@/components/EvidenceCards";
 import { InputPanel } from "@/components/InputPanel";
@@ -9,13 +9,20 @@ import { PipelineTrace } from "@/components/PipelineTrace";
 import { ShareCorrection } from "@/components/ShareCorrection";
 import { Timeline } from "@/components/Timeline";
 import { Section } from "@/components/ui";
-import { ApiError, verifyMessage } from "@/lib/api";
+import { ApiError, checkHealth, verifyMessage } from "@/lib/api";
 import type { VerifyResponse } from "@/lib/types";
 
 export default function Home() {
   const [result, setResult] = useState<VerifyResponse | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [apiUp, setApiUp] = useState<boolean | null>(null);
+
+  // Surface backend availability on load. A reviewer who forgot to start
+  // uvicorn should learn that from the page, not from a failed verification.
+  useEffect(() => {
+    void checkHealth().then(setApiUp);
+  }, []);
 
   async function handleVerify(message: string) {
     setIsLoading(true);
@@ -36,7 +43,7 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-bg">
-      <Header />
+      <Header apiUp={apiUp} />
 
       <main className="mx-auto max-w-5xl px-5 pb-24 sm:px-8">
         <div className="py-8">
@@ -110,7 +117,7 @@ export default function Home() {
   );
 }
 
-function Header() {
+function Header({ apiUp }: { apiUp: boolean | null }) {
   return (
     <header className="relative overflow-hidden border-b border-edge">
       <div className="grid-bg pointer-events-none absolute inset-0" aria-hidden />
@@ -138,10 +145,21 @@ function Header() {
           cited evidence, for Singapore and Malaysia.
         </p>
 
-        <div className="mt-6 flex flex-wrap gap-x-5 gap-y-1.5 font-mono text-[10px] tracking-[0.14em] text-fg-subtle">
+        <div className="mt-6 flex flex-wrap items-center gap-x-5 gap-y-1.5 font-mono text-[10px] tracking-[0.14em] text-fg-subtle">
           <span>LEGAL STATUS</span>
           <span>PRODUCT SAFETY</span>
           <span>POLICY &amp; REGULATION</span>
+          {apiUp === false ? (
+            <span
+              className="rounded-sm border px-1.5 py-0.5 tracking-normal"
+              style={{
+                color: "var(--verdict-false)",
+                borderColor: "var(--verdict-false)",
+              }}
+            >
+              API OFFLINE — start the backend on :8000
+            </span>
+          ) : null}
         </div>
       </div>
     </header>

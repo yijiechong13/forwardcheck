@@ -51,6 +51,34 @@ _NEGATION_PATTERNS: list[tuple[str, tuple[StatusType, ...]]] = [
      (StatusType.ENFORCED, StatusType.EFFECTIVE)),
 ]
 
+#: Plain-language corrections for each denied status. These reach the user
+#: directly through the shareable correction card.
+_NEGATION_RATIONALE: dict[StatusType, str] = {
+    StatusType.CHARGE: (
+        "Source states no one has been charged — the case is still at the "
+        "investigation or review stage"
+    ),
+    StatusType.CONVICTION: (
+        "Source states no conviction has been recorded — the person has been "
+        "charged but the case has not been decided"
+    ),
+    StatusType.SENTENCE: (
+        "Source states no sentence has been passed — the court has not decided "
+        "the case"
+    ),
+    StatusType.LOCAL_RECALL: (
+        "Source states there has been no local recall — the affected batches "
+        "were not sold here"
+    ),
+    StatusType.BAN: (
+        "Source states the product has not been banned and remains on sale"
+    ),
+    StatusType.ENFORCED: (
+        "Source states owners will not be required to give up their animals"
+    ),
+    StatusType.EFFECTIVE: "Source states this requirement does not apply as claimed",
+}
+
 # "Maximum penalty" framing — refutes any claim of an automatic consequence.
 _MAXIMUM_FRAMING = re.compile(
     r"\bnot\s+exceeding\b|\bmaximum\s+penalty\b|\bup\s+to\s+(?:a\s+)?(?:fine|\$|\d)"
@@ -123,9 +151,14 @@ def _grade_pair(
             return EvidenceGrade(
                 evidence_id=doc.id,
                 label=GradeLabel.REFUTES,
-                rationale=(
-                    f"Source explicitly states this status has not been reached, "
-                    f"contradicting the claim of {claim_status.value.replace('_', ' ')}."
+                # State the actual correction, not that "a status was not
+                # reached". This rationale is what ends up in the share card,
+                # and a person reading it in a group chat needs to know what is
+                # true instead — abstract status language helps nobody.
+                rationale=_NEGATION_RATIONALE.get(
+                    claim_status,
+                    f"Source states this has not reached the "
+                    f"'{claim_status.value.replace('_', ' ')}' stage.",
                 ),
                 score=min(0.95, 0.7 + retrieval_score * 0.25),
             )

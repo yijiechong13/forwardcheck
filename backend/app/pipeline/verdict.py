@@ -293,14 +293,20 @@ def _write_correction(claims: list[Claim], overall: Verdict) -> str:
             "Best not to forward until it's confirmed."
         )
 
-    lines = ["Checked this before forwarding:"]
+    lines = ["I checked this before forwarding:"]
     for claim in supported[:2]:
-        lines.append(f"✓ TRUE: {claim.text.rstrip('.')}.")
+        lines.append(f"✓ TRUE — {claim.text.rstrip('.')}.")
     for claim in wrong[:3]:
-        lines.append(f"✗ NOT ACCURATE: {claim.text.rstrip('.')} — {claim.key_reason}")
+        # Trim the grader's rationale to its first clause: the group chat needs
+        # the correction, not the reasoning behind it.
+        reason = claim.key_reason.split(", contradicting")[0].split(". ")[0]
+        reason = reason[0].lower() + reason[1:] if reason else reason
+        lines.append(f"✗ NOT TRUE — {claim.text.rstrip('.')}: {reason.rstrip('.')}.")
     for claim in unknown[:1]:
-        lines.append(f"? UNCONFIRMED: {claim.text.rstrip('.')}.")
-    lines.append("Please don't forward the original as-is.")
+        lines.append(
+            f"? NOT CONFIRMED — {claim.text.rstrip('.')}: no official source says this yet."
+        )
+    lines.append("Worth not passing the original on as it is.")
     return " ".join(lines)
 
 
