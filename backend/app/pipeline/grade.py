@@ -194,7 +194,16 @@ def _grade_pair(
                 ),
                 score=min(0.95, 0.6 + retrieval_score * 0.35),
             )
-        if rung(claim_status) >= 0 and rung(doc_status) > rung(claim_status):
+        if (
+            rung(claim_status) >= 0
+            and rung(doc_status) > rung(claim_status)
+            # Entailment only holds if the document is about the same matter.
+            # Without this check, any document at a later rung "supports" any
+            # earlier-rung claim — which let cat-licensing notices support a
+            # claim about durian price controls purely because 'deadline'
+            # outranks 'proposed'. Ladder position is not topical relevance.
+            and overlap >= 0.25
+        ):
             # Document is *ahead* of the claim: it supports the claim's status
             # having been passed. (Sentenced implies charged.)
             return EvidenceGrade(

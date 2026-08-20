@@ -23,12 +23,22 @@ import time
 from datetime import date, datetime
 
 from app.config import settings
+import re
+
 from app.models.schemas import Claim, GradeLabel, Verdict
 from app.models.status import STATUS_DOMAIN, StatusType, is_escalation
 from app.pipeline.graph import PipelineState
 
 #: Grades at or below this score are too weak to carry a confident verdict.
 _WEAK_GRADE = 0.45
+
+#: Claim-side phrasing asserting an automatic or guaranteed consequence, as
+#: opposed to a possible one. "will be fined" vs "may be fined on conviction".
+_AUTOMATIC_MARKER = re.compile(
+    r"\bwill\s+be\s+(?:fined|jailed|charged|removed|banned)\b"
+    r"|\bautomatic(?:ally)?\b|\bmust\s+pay\b|\bwill\s+face\b",
+    re.IGNORECASE,
+)
 
 
 def _decide_claim(claim: Claim, stale_ids: set[str]) -> tuple[Verdict, float, str]:
@@ -121,17 +131,37 @@ def _mark_escalations(state: PipelineState) -> None:
         if STATUS_DOMAIN.get(claim_status) is None:
             continue
 
-        # If any retrieved source asserts the claimed status directly, the claim
-        # is not an escalation regardless of what other, lower-rung documents
-        # say. Without this check a correct claim ("cats must be licensed by 31
-        # Aug", confirmed by the licensing notice) is flagged as an escalation
-        # merely because the pool also contains documents about the policy
-        # being in effect — and a true claim would be reported as Misleading.
-        if any(
+        # A source that *refutes* the claim cannot also vindicate its status.
+        # The statute asserting a "penalty" matches a claim about a penalty at
+        # the rung level, but it refutes it on substance (maximum vs automatic),
+        # so the exact-match guard below must not apply to it.
+        refuted = any(
+            g.label == GradeLabel.REFUTES for g in claim.grades
+        )
+
+        # If a retrieved source asserts the claimed status directly and does not
+        # refute the claim, this is not an escalation — regardless of what other,
+        # lower-rung documents say. Without this check a correct claim ("cats
+        # must be licensed by 31 Aug", confirmed by the licensing notice) is
+        # flagged as an escalation merely because the pool also contains
+        # documents about the policy being in effect, and a true claim would be
+        # reported as Misleading.
+        if not refuted and any(
             doc.status_asserted == claim.status_type
             for doc, _ in state.retrieved.get(claim.id, [])
         ):
             continue
+
+        # A refuted claim whose status the evidence nominally shares is still an
+        # escalation of substance: the claim asserts a stronger version of what
+        # the source describes.
+        if refuted and not claim.is_escalation:
+            universal_claim = getattr(claim, "_is_universal", False)
+            if universal_claim or _AUTOMATIC_MARKER.search(claim.text):
+                claim.is_escalation = True
+                claim.escalation_from = "maximum penalty"
+                claim.escalation_to = "automatic consequence"
+                continue
 
         best_supported: StatusType | None = None
         for doc, _ in state.retrieved.get(claim.id, []):

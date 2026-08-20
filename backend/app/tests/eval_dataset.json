@@ -1,0 +1,170 @@
+{
+  "version": "1.0",
+  "note": "Gold labels for the seeded evidence corpus. These are regression guards, not a generalisation estimate — the corpus was built for these cases. See EVAL_PLAN.md.",
+  "cases": [
+    {
+      "id": "cat-licensing",
+      "description": "Real licensing deadline wrapped in a fabricated automatic fine and a false scope extension.",
+      "message": "⚠️ URGENT ⚠️ From 1 Sept, HDB cat owners with more than 2 cats will be fined $5,000 and AVS will remove the extra cats. All cats, including community cats, must be licensed by 31 Aug. Please forward to all cat owners 🐱🙏",
+      "expectedOverallVerdict": "Misleading",
+      "expectedJurisdiction": "Singapore",
+      "expectedDomain": "policy",
+      "expectedClaims": [
+        {
+          "gist": "owners with more than 2 cats will be fined $5,000",
+          "statusType": "penalty",
+          "verdict": "Misleading",
+          "isEscalation": true,
+          "requiresCitation": true,
+          "note": "$5,000 is a maximum court penalty, not an automatic fine."
+        },
+        {
+          "gist": "AVS will remove the extra cats",
+          "statusType": "enforced",
+          "verdict": "Misleading",
+          "isEscalation": true,
+          "requiresCitation": true,
+          "note": "Source states owners will not be required to give up cats."
+        },
+        {
+          "gist": "cats must be licensed by 31 Aug",
+          "statusType": "deadline",
+          "verdict": "Supported",
+          "isEscalation": false,
+          "requiresCitation": true,
+          "note": "The pet cat licensing deadline is genuine."
+        },
+        {
+          "gist": "community cats must be licensed",
+          "statusType": "deadline",
+          "verdict": "Misleading",
+          "isEscalation": false,
+          "requiresCitation": true,
+          "note": "Licensing applies to owned pet cats; community cats are out of scope."
+        }
+      ]
+    },
+    {
+      "id": "ns-enlistment",
+      "description": "Legal-status escalation: arrest and charge are real, conviction and sentence are not.",
+      "message": "BREAKING: Amos Yee has been sentenced to 3 years jail in Singapore after being deported from the US. He was arrested at Changi Airport and convicted under the Enlistment Act for NS offences. This means all NS defaulters who return from overseas will automatically be jailed. Forward this.",
+      "expectedOverallVerdict": "Misleading",
+      "expectedJurisdiction": "Singapore",
+      "expectedDomain": "legal",
+      "expectedClaims": [
+        {
+          "gist": "sentenced to 3 years jail",
+          "statusType": "sentence",
+          "verdict": "Misleading",
+          "isEscalation": true,
+          "requiresCitation": true,
+          "note": "Evidence reaches charge only. No sentence exists."
+        },
+        {
+          "gist": "arrested at Changi Airport",
+          "statusType": "arrest",
+          "verdict": "Supported",
+          "isEscalation": false,
+          "requiresCitation": true,
+          "note": "Police statement confirms the arrest."
+        },
+        {
+          "gist": "convicted under the Enlistment Act",
+          "statusType": "conviction",
+          "verdict": "Misleading",
+          "isEscalation": true,
+          "requiresCitation": true,
+          "note": "Charged, not convicted. No plea has been taken."
+        },
+        {
+          "gist": "all NS defaulters will automatically be jailed",
+          "statusType": "sentence",
+          "verdict": "Misleading",
+          "isEscalation": true,
+          "requiresCitation": true,
+          "note": "Maximum penalty, decided case by case — not automatic."
+        }
+      ]
+    },
+    {
+      "id": "rocky-case",
+      "description": "Developing news: investigation reported as a charge already in court.",
+      "message": "Rocky's owner has been charged with animal abuse after the dog died during an enforcement operation. The owner is already facing court action. Forward this.",
+      "expectedOverallVerdict": "Misleading",
+      "expectedJurisdiction": "Singapore",
+      "expectedDomain": "legal",
+      "expectedClaims": [
+        {
+          "gist": "owner has been charged with animal abuse",
+          "statusType": "charge",
+          "verdict": "Misleading",
+          "isEscalation": true,
+          "requiresCitation": true,
+          "note": "AGC is reviewing; no person has been charged."
+        },
+        {
+          "gist": "owner is already facing court action",
+          "statusType": "charge",
+          "verdict": "Misleading",
+          "isEscalation": true,
+          "requiresCitation": true,
+          "note": "No court action exists at the investigation stage."
+        }
+      ]
+    },
+    {
+      "id": "out-of-scope-abstain",
+      "description": "Adversarial: plausible-sounding but entirely outside the corpus. Must abstain.",
+      "message": "The price of durian in Geylang has doubled this year and the government is planning to introduce a durian price control scheme next month according to my uncle who works there.",
+      "expectedOverallVerdict": "Insufficient evidence",
+      "expectedJurisdiction": "Singapore",
+      "expectedDomain": "policy",
+      "expectedClaims": [
+        {
+          "gist": "government planning a durian price control scheme",
+          "statusType": "proposed",
+          "verdict": "Insufficient evidence",
+          "isEscalation": false,
+          "requiresCitation": false,
+          "note": "Nothing in the corpus addresses this. Must not guess."
+        }
+      ]
+    },
+    {
+      "id": "accurate-forward",
+      "description": "Adversarial: an accurate message. Must NOT be flagged as misleading.",
+      "message": "Pet cat owners in HDB flats must license their cats by 31 August. Licences are free during the initial registration period.",
+      "expectedOverallVerdict": "Supported",
+      "expectedJurisdiction": "Singapore",
+      "expectedDomain": "policy",
+      "expectedClaims": [
+        {
+          "gist": "pet cat owners must license their cats by 31 August",
+          "statusType": "deadline",
+          "verdict": "Supported",
+          "isEscalation": false,
+          "requiresCitation": true,
+          "note": "Directly supported by the AVS licensing notice."
+        }
+      ]
+    },
+    {
+      "id": "overseas-recall-escalation",
+      "description": "Product-safety escalation: an overseas recall reported as a local ban.",
+      "message": "URGENT: This snack has been BANNED in Malaysia and recalled from all shops after being recalled overseas. Do not buy it. Forward to your family group.",
+      "expectedOverallVerdict": "Misleading",
+      "expectedJurisdiction": "Malaysia",
+      "expectedDomain": "product_safety",
+      "expectedClaims": [
+        {
+          "gist": "snack has been banned in Malaysia",
+          "statusType": "ban",
+          "verdict": "Misleading",
+          "isEscalation": true,
+          "requiresCitation": true,
+          "note": "Advisory only; the product remains available for sale."
+        }
+      ]
+    }
+  ]
+}

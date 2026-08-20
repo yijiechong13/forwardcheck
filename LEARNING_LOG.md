@@ -209,3 +209,54 @@ rule-based would invalidate any eval comparison drawn from it.
 - *Unimplemented placeholders that raise.* `AnthropicLLMAdapter` and `WebSearchAdapter` exist as
   documented shapes with `NotImplementedError` bodies. They mark the seam and record the
   constraints without pretending to work.
+
+---
+
+## Phase 5 — Evaluation harness
+
+**What was built**
+A 6-case / 13-claim labelled dataset, a scoring harness computing the six EVAL_PLAN metrics,
+a CLI report that gates on targets, and 11 eval tests. All targets met, zero critical errors.
+
+**Files changed**
+`backend/app/eval/harness.py`, `backend/app/tests/{eval_dataset.json,test_eval.py}`,
+`backend/scripts/run_eval.py`, plus fixes in `retrieval_adapter.py`, `grade.py`, `verdict.py`.
+
+**What RAG concept this phase teaches**
+
+*The eval finds what testing does not.* Writing the harness immediately surfaced the worst bug in
+the project: a message about **durian prices** returned **Supported**, cited to cat-licensing
+documents. 42 unit tests were green at the time. The tests asserted behaviour on messages the
+corpus covers; only the adversarial out-of-scope case exposed what happened when it did not.
+
+The root cause is worth remembering, because it is a general RAG failure:
+**score normalisation destroys the signal that nothing matched.** Retrieval normalised scores
+against the best hit *in that query*, so the top result always scored 1.0 — whether it was a
+perfect match or the least irrelevant document in the corpus. Relative relevance is not evidence
+of relevance. The fix is an absolute floor before normalising, plus damping when the best raw
+score is weak.
+
+A second bug rode along: grading inferred support from ladder position alone ("deadline outranks
+proposed, so it entails it"), without checking the document was about the same *matter*.
+**Ladder position is not topical relevance.**
+
+*Not all errors are equal.* The harness counts `critical_errors` separately — endorsing a false
+claim, losing an escalation, or answering confidently where the gold label is abstain. Aggregate
+accuracy would have let the durian bug hide behind a 92% average. It is asserted at zero.
+
+**What to study next**
+- RAGAS (faithfulness, answer relevance, context precision/recall) — the standard vocabulary for
+  what this harness measures by hand.
+- Calibration: whether the confidence numbers mean anything, which this eval does not yet test.
+- Adversarial dataset construction — the two adversarial cases found more bugs than the three
+  demo cases combined.
+
+**Trade-offs made**
+- *Six cases.* Enough to be a regression guard, nowhere near enough to be a generalisation
+  estimate. Stated plainly in EVAL_PLAN.md rather than implied by a 100% score, which on a
+  dataset this small mostly measures that the corpus was built for these cases.
+- *Fuzzy claim matching by token overlap.* Necessary because the pipeline rewrites claims
+  (subject carry-forward, scope splitting), so exact matching would measure phrasing rather than
+  extraction. It will drift if wording changes substantially.
+- *Targets that currently pass with headroom.* Deliberate: they are floors that catch regression,
+  not stretch goals. The number that matters is critical errors at zero.

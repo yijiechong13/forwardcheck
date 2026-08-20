@@ -101,6 +101,15 @@ class MockRetrievalAdapter(RetrievalAdapter):
     K1 = 1.5  # term-frequency saturation
     B = 0.75  # length normalisation
 
+    #: Raw BM25 floor below which the corpus is treated as not covering the
+    #: query at all. Without this, relative normalisation would rank the least
+    #: irrelevant document as a perfect match.
+    MIN_ABSOLUTE_SCORE = 2.0
+
+    #: Raw BM25 score representing a genuinely strong match. Best-hit scores
+    #: below this damp the whole result set proportionally.
+    WEAK_MATCH_SCORE = 6.0
+
     def __init__(self, corpus: list[Evidence] | None = None) -> None:
         self._corpus = corpus if corpus is not None else ALL_EVIDENCE
         self._docs: dict[str, list[str]] = {}
@@ -197,8 +206,24 @@ class MockRetrievalAdapter(RetrievalAdapter):
 
         # Normalise to [0, 1] against the best hit so downstream thresholds are
         # stable regardless of query length.
+        #
+        # Relative normalisation alone is dangerous: it makes the top hit score
+        # 1.0 even when *nothing* matched, so a query about durian prices scored
+        # cat-licensing documents at 1.0 and the grader duly "supported" it.
+        # An absolute floor is applied first — below it, the corpus genuinely
+        # does not cover the query and the honest answer is no results at all.
         best = max(score for _, score in raw)
+        if best < self.MIN_ABSOLUTE_SCORE:
+            return []
+
         scored = [(doc, score / best) for doc, score in raw] if best > 0 else raw
+
+        # Dampen the whole result set when even the best match is weak, so a
+        # marginal top hit cannot present itself as a perfect one.
+        if best < self.WEAK_MATCH_SCORE:
+            damping = best / self.WEAK_MATCH_SCORE
+            scored = [(doc, score * damping) for doc, score in scored]
+
         scored.sort(key=lambda pair: pair[1], reverse=True)
         return scored[:limit]
 
