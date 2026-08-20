@@ -125,8 +125,14 @@ class PipelineStep(ApiModel):
     details: dict = Field(default_factory=dict)
 
 
+#: Longest accepted forwarded message. Mirrored by MAX_CHARS in the frontend's
+#: InputPanel — the two must agree, or the UI silently truncates input the API
+#: would have accepted (or the API rejects what the UI allowed).
+MAX_MESSAGE_CHARS = 4000
+
+
 class VerifyRequest(BaseModel):
-    message: str = Field(min_length=1, max_length=8000)
+    message: str = Field(min_length=1, max_length=MAX_MESSAGE_CHARS)
 
 
 class VerifyResponse(ApiModel):

@@ -16,16 +16,9 @@ carry a reliable date or be treated as undated and heavily discounted.
 adapter returns nothing rather than pretending, so `Insufficient evidence` stays
 honest when search is off.
 
-TODO(web-search): implement WebSearchAdapter.
-  - provider: Brave Search API or Tavily (both return dates and snippets)
-  - filter results to SOURCE_ALLOWLIST before they reach the pipeline
-  - fetch and extract the page body; the snippet alone is usually too short to
-    grade a status claim against
-  - cache aggressively by URL — government advisories change rarely and the
-    same claims get forwarded for months
-  - respect robots.txt and rate limits
-  - never let a live result silently outrank a primary source: tier first,
-    recency second
+Implemented with Tavily (see TavilySearchAdapter). Provider-specific details
+stay behind the SearchAdapter interface so another provider can be swapped in
+without touching the pipeline.
 """
 
 from __future__ import annotations
@@ -36,8 +29,13 @@ from dataclasses import dataclass
 from app.config import settings
 from app.models.schemas import SourceTier
 
-#: Domain -> authority tier. Singapore only for the MVP. Only these may enter
-#: the evidence pool from live search. Everything else is dropped rather than added as "secondary", because
+#: Domain -> authority tier for Singapore sources.
+#:
+#: Note on unknown domains: they are NOT dropped. A developing story sometimes
+#: only has coverage the allowlist has not catalogued, and discarding it would
+#: turn "we found weaker evidence" into "we found nothing". They are admitted at
+#: SECONDARY weight (0.3), which cannot outrank an official source, and the
+#: grader is told the tier of every passage. Everything else is dropped rather than added as "secondary", because
 #: an unknown source with a guessed tier corrupts the ranking that every verdict
 #: depends on. See DATA_SOURCES.md.
 SOURCE_ALLOWLIST: dict[str, SourceTier] = {
@@ -194,7 +192,8 @@ class TavilySearchAdapter(SearchAdapter):
             meter.record_cache_hit()
             return [self._to_result(item, query) for item in cached]
 
-        meter.charge_search()
+        # One logical search; each HTTP attempt below is charged separately.
+        meter.begin_search_operation()
 
         payload = {
             "query": query,
@@ -206,10 +205,13 @@ class TavilySearchAdapter(SearchAdapter):
         attempts = 0
         while True:
             attempts += 1
+            # Charged immediately before the request is sent, so a retry
+            # consumes budget exactly as it consumes money.
+            meter.charge_search_request(is_retry=attempts > 1)
             try:
                 response = self._client.post(self._ENDPOINT, json=payload)
             except Exception as exc:  # connection/timeout
-                if attempts == 1:
+                if attempts == 1 and meter.can_retry_search():
                     _time.sleep(1.0)
                     continue
                 raise SearchError("timeout") from exc
@@ -217,7 +219,11 @@ class TavilySearchAdapter(SearchAdapter):
             if response.status_code in (401, 403):
                 # Never retried, never cached.
                 raise SearchError("auth")
-            if response.status_code in self._TRANSIENT and attempts == 1:
+            if (
+                response.status_code in self._TRANSIENT
+                and attempts == 1
+                and meter.can_retry_search()
+            ):
                 _time.sleep(2.0 if response.status_code == 429 else 1.0)
                 continue
             if response.status_code != 200:

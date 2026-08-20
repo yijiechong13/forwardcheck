@@ -39,8 +39,8 @@ PROJECT_SPEC.md
 frontend/AGENTS.md
 frontend/CLAUDE.md
 frontend/README.md
-.env.example
-**/.env.example
+# NOTE: .env.example is deliberately TRACKED — it documents required
+# variable names with placeholder values only, and setup depends on it.
 
 # Local TTL cache for live-mode search/page results (never contains secrets)
 backend/.cache/

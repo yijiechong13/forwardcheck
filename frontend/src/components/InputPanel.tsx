@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { EXAMPLE_CLAIMS } from "@/lib/examples";
 
+// Must match MAX_MESSAGE_CHARS in backend/app/models/schemas.py.
 const MAX_CHARS = 4000;
 
 /**

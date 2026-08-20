@@ -52,13 +52,16 @@ def test_usage_summary_contains_no_prompt_or_key_data():
     from app.services.usage import UsageMeter
 
     meter = UsageMeter()
-    meter.charge_llm_call()
+    meter.begin_llm_operation()
+    meter.charge_llm_request()
     meter.record_tokens(100, 50)
     summary = json.dumps(meter.summary())
     assert "sk-" not in summary and "tvly-" not in summary
     assert set(meter.summary()) == {
-        "mode", "llmCalls", "searches", "fetches",
-        "inputTokens", "outputTokens", "cacheHits", "decisions",
+        "mode", "servedFromCache",
+        "llmOperations", "searchOperations",
+        "llmRequests", "llmRetries", "searchRequests", "searchRetries",
+        "fetches", "inputTokens", "outputTokens", "cacheHits", "decisions",
     }
 
 
@@ -78,17 +81,35 @@ def test_internal_errors_do_not_leak_details(monkeypatch):
     assert "Traceback" not in body
 
 
-def test_env_example_contains_only_placeholders():
-    """The committed template must never carry a real key."""
+def test_env_example_exists_and_contains_only_placeholders():
+    """The committed template must exist and must never carry a real key.
+
+    Its absence is a failure, not a skip: setup instructions depend on it, and
+    a silently-skipped test would let it disappear unnoticed.
+    """
     from pathlib import Path
 
     example = Path(__file__).resolve().parents[2] / ".env.example"
-    if not example.exists():
-        pytest.skip(".env.example not present")
+    assert example.exists(), "backend/.env.example is missing; setup depends on it"
     text = example.read_text()
     assert "sk-ant-" not in text
     assert "tvly-" not in text
     assert "your_anthropic_api_key" in text
+    assert "your_tavily_api_key" in text
+
+    # Every variable the backend reads must be documented in the template.
+    import re
+
+    for required in (
+        "FORWARDCHECK_MODE", "ANTHROPIC_API_KEY", "TAVILY_API_KEY",
+        "ANTHROPIC_MODEL", "FORWARDCHECK_MAX_CLAIMS",
+        "FORWARDCHECK_MAX_SEARCH_ROUNDS", "FORWARDCHECK_MAX_SEARCHES_TOTAL",
+        "FORWARDCHECK_MAX_SOURCES_PER_CLAIM",
+        "FORWARDCHECK_MAX_LLM_CALLS_PER_REQUEST",
+        "FORWARDCHECK_MAX_FETCHES_TOTAL",
+        "FORWARDCHECK_REQUEST_TIMEOUT_SECONDS",
+    ):
+        assert re.search(rf"^{required}=", text, re.M), f"{required} missing from .env.example"
 
 
 # ---------------------------------------------------------------------------

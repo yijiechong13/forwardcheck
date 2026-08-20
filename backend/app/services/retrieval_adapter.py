@@ -5,7 +5,10 @@ lexical (BM25-style) scoring over the in-memory seeded corpus; a future
 `PgVectorRetrievalAdapter` implements the same two methods against Postgres +
 pgvector, and no pipeline code changes.
 
-TODO(pgvector): implement PgVectorRetrievalAdapter.
+OPTIONAL / UNUSED — PgVectorRetrievalAdapter is a documented future option, not
+part of the working system. Nothing in the application constructs it, no
+embeddings are generated anywhere, and FORWARDCHECK_RETRIEVAL is left at "mock".
+It is retained only because the sketch below records a concrete design:
   - table: evidence(id, title, publisher, tier, jurisdiction, published_at,
            url, snippet, status_asserted, embedding vector(1024))
   - query: embed the claim, then
@@ -232,7 +235,11 @@ class MockRetrievalAdapter(RetrievalAdapter):
 
 
 class PgVectorRetrievalAdapter(RetrievalAdapter):
-    """Placeholder for the Postgres + pgvector implementation."""
+    """Unused future option. Not part of the working system.
+
+    Raises on use so it can never be mistaken for a live code path. See the
+    module docstring for the intended design if it is ever built.
+    """
 
     def __init__(self, dsn: str) -> None:
         self._dsn = dsn

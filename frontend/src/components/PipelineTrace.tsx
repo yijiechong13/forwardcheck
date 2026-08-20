@@ -20,8 +20,13 @@ export function PipelineTrace({ trace }: { trace: PipelineStep[] }) {
   const usage = trace.find((step) => step.node === "usage")?.details as
     | {
         mode?: string;
-        llmCalls?: number;
-        searches?: number;
+        servedFromCache?: boolean;
+        llmOperations?: number;
+        llmRequests?: number;
+        llmRetries?: number;
+        searchOperations?: number;
+        searchRequests?: number;
+        searchRetries?: number;
         fetches?: number;
         inputTokens?: number;
         outputTokens?: number;
@@ -58,17 +63,21 @@ export function PipelineTrace({ trace }: { trace: PipelineStep[] }) {
           {usage ? (
             <div className="mb-4 rounded-md border border-edge bg-bg px-3 py-2.5">
               <div className="mb-1.5 font-mono text-[10px] tracking-[0.16em] text-fg-subtle">
-                REQUEST USAGE
+                {usage.servedFromCache ? "REQUEST USAGE — SERVED FROM CACHE" : "REQUEST USAGE"}
               </div>
               <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-fg-muted">
                 <span className="tnum">
                   mode <strong className="font-semibold text-fg">{usage.mode ?? "—"}</strong>
                 </span>
-                <span className="tnum">
-                  LLM calls <strong className="font-semibold text-fg">{usage.llmCalls ?? 0}</strong>
+                <span className="tnum" title="Billable provider requests, retries included">
+                  LLM requests{" "}
+                  <strong className="font-semibold text-fg">{usage.llmRequests ?? 0}</strong>
+                  {usage.llmRetries ? ` (${usage.llmRetries} retried)` : ""}
                 </span>
-                <span className="tnum">
-                  searches <strong className="font-semibold text-fg">{usage.searches ?? 0}</strong>
+                <span className="tnum" title="Billable provider requests, retries included">
+                  searches{" "}
+                  <strong className="font-semibold text-fg">{usage.searchRequests ?? 0}</strong>
+                  {usage.searchRetries ? ` (${usage.searchRetries} retried)` : ""}
                 </span>
                 <span className="tnum">
                   fetches <strong className="font-semibold text-fg">{usage.fetches ?? 0}</strong>

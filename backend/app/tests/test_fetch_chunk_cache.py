@@ -7,6 +7,16 @@ import time
 import httpx
 import pytest
 
+
+class _IterStream(httpx.SyncByteStream):
+    """Minimal streaming body for MockTransport."""
+
+    def __init__(self, iterator):
+        self._iterator = iterator
+
+    def __iter__(self):
+        yield from self._iterator
+
 from app.pipeline.chunk import chunk_blocks, snippet_chunk
 from app.services.cache import TTLCache
 from app.services.fetch import (
@@ -73,16 +83,61 @@ def test_non_html_content_type_is_rejected(monkeypatch, tmp_path):
     assert excinfo.value.kind == "content_type_not_text"
 
 
-def test_oversized_response_is_truncated_not_crashed(monkeypatch, tmp_path):
+def test_oversized_streamed_response_stops_at_the_limit(monkeypatch, tmp_path):
+    """A huge streamed body must never be fully buffered.
+
+    The transport yields far more than the cap; the fetcher must stop reading
+    and overshoot by at most one network chunk.
+    """
     monkeypatch.setattr("app.config.settings.cache_dir", tmp_path)
-    monkeypatch.setattr("app.config.settings.fetch_max_bytes", 2000)
+    monkeypatch.setattr("app.config.settings.fetch_max_bytes", 50_000)
     _public(monkeypatch)
-    huge = "<html><body>" + "<p>Row of policy text here.</p>" * 500 + "</body></html>"
+
+    served = {"bytes": 0}
+    total_size = 5_000_000  # 100x the cap
+
+    def stream_body():
+        chunk = b"<p>" + b"policy text " * 80 + b"</p>"
+        sent = 0
+        while sent < total_size:
+            served["bytes"] += len(chunk)
+            sent += len(chunk)
+            yield chunk
+
+    def handler(request):
+        return httpx.Response(
+            200,
+            headers={"content-type": "text/html"},
+            stream=httpx.SyncByteStream() if False else _IterStream(stream_body()),
+        )
+
+    client = httpx.Client(transport=httpx.MockTransport(handler))
+    page = fetch_page("https://example.com/huge", UsageMeter(), http_client=client)
+
+    extracted = sum(len(t) for _, t in page.blocks)
+    assert extracted <= 50_000
+    # Overshoot bounded by one 16 KiB read, not by the 5 MB the server offered.
+    assert served["bytes"] <= 50_000 + 16 * 1024 + 4096, (
+        f"read {served['bytes']} bytes for a 50,000-byte cap"
+    )
+
+
+def test_declared_oversized_content_length_is_rejected_before_reading(
+    monkeypatch, tmp_path
+):
+    monkeypatch.setattr("app.config.settings.cache_dir", tmp_path)
+    monkeypatch.setattr("app.config.settings.fetch_max_bytes", 1000)
+    _public(monkeypatch)
     client = httpx.Client(transport=httpx.MockTransport(
-        lambda r: httpx.Response(200, headers={"content-type": "text/html"}, text=huge)
+        lambda r: httpx.Response(
+            200,
+            headers={"content-type": "text/html", "content-length": "999999"},
+            text="<p>x</p>",
+        )
     ))
-    page = fetch_page("https://example.com/big", UsageMeter(), http_client=client)
-    assert sum(len(t) for _, t in page.blocks) <= 2100
+    with pytest.raises(FetchError) as excinfo:
+        fetch_page("https://example.com/big", UsageMeter(), http_client=client)
+    assert excinfo.value.kind == "too_large"
 
 
 def test_too_many_redirects_fails(monkeypatch, tmp_path):

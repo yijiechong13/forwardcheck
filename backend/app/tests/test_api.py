@@ -89,3 +89,30 @@ def test_all_evidence_is_labelled_mock():
     body = client.post("/verify", json={"message": VALID_MESSAGE}).json()
     for doc in body["evidence"]:
         assert doc["isMock"] is True
+
+
+def test_message_length_limit_matches_the_frontend():
+    """The API cap and the UI's MAX_CHARS must agree.
+
+    If they drift, the UI either truncates input the API would accept, or lets
+    through input the API rejects with a confusing 422.
+    """
+    import re
+    from pathlib import Path
+
+    from app.models.schemas import MAX_MESSAGE_CHARS
+
+    panel = (
+        Path(__file__).resolve().parents[3]
+        / "frontend" / "src" / "components" / "InputPanel.tsx"
+    )
+    if not panel.exists():
+        pytest.skip("frontend not present in this checkout")
+    match = re.search(r"const MAX_CHARS = (\d+)", panel.read_text())
+    assert match, "MAX_CHARS not found in InputPanel.tsx"
+    assert int(match.group(1)) == MAX_MESSAGE_CHARS
+
+
+def test_message_over_the_limit_is_rejected():
+    response = client.post("/verify", json={"message": "x" * 5000})
+    assert response.status_code == 422

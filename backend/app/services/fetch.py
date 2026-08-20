@@ -33,6 +33,9 @@ from app.config import settings
 
 logger = logging.getLogger("forwardcheck.fetch")
 
+#: Network read granularity. Overshoot past fetch_max_bytes is bounded by this.
+_CHUNK_BYTES = 16 * 1024
+
 
 class FetchError(Exception):
     def __init__(self, kind: str) -> None:
@@ -193,34 +196,67 @@ def fetch_page(url: str, meter, http_client=None) -> FetchedPage:
     )
 
     current = url
-    for _ in range(settings.fetch_max_redirects + 1):
-        try:
-            response = client.get(current)
-        except httpx.TimeoutException as exc:
-            raise FetchError("timeout") from exc
-        except httpx.HTTPError as exc:
-            raise FetchError("connection") from exc
+    response = None
+    try:
+        for _ in range(settings.fetch_max_redirects + 1):
+            # stream=True: headers arrive before the body, so content type and
+            # size can be enforced without buffering the whole response.
+            request = client.build_request("GET", current)
+            try:
+                response = client.send(request, stream=True)
+            except httpx.TimeoutException as exc:
+                raise FetchError("timeout") from exc
+            except httpx.HTTPError as exc:
+                raise FetchError("connection") from exc
 
-        if response.status_code in (301, 302, 303, 307, 308):
-            location = response.headers.get("location")
-            if not location:
-                raise FetchError("bad_redirect")
-            current = str(httpx.URL(current).join(location))
-            check_url_allowed(current)  # re-validate: redirects can pivot to internal hosts
-            continue
-        break
-    else:
-        raise FetchError("too_many_redirects")
+            if response.status_code in (301, 302, 303, 307, 308):
+                location = response.headers.get("location")
+                response.close()
+                response = None
+                if not location:
+                    raise FetchError("bad_redirect")
+                current = str(httpx.URL(current).join(location))
+                # Re-validate every hop: a redirect into internal space is a
+                # standard SSRF pivot, and the first check does not cover it.
+                check_url_allowed(current)
+                continue
+            break
+        else:
+            raise FetchError("too_many_redirects")
 
-    if response.status_code != 200:
-        raise FetchError(f"status_{response.status_code}")
+        if response.status_code != 200:
+            raise FetchError(f"status_{response.status_code}")
 
-    content_type = response.headers.get("content-type", "").lower()
-    if "html" not in content_type and "text/plain" not in content_type:
-        raise FetchError("content_type_not_text")
+        content_type = response.headers.get("content-type", "").lower()
+        if "html" not in content_type and "text/plain" not in content_type:
+            raise FetchError("content_type_not_text")
 
-    body = response.content[: settings.fetch_max_bytes]
-    title, blocks = extract_readable(body.decode(response.encoding or "utf-8", errors="replace"))
+        # Reject an oversized body declared up front, before reading anything.
+        declared = response.headers.get("content-length")
+        if declared and declared.isdigit() and int(declared) > settings.fetch_max_bytes:
+            raise FetchError("too_large")
+
+        # Stream in bounded chunks and stop at the cap. Overshoot is at most
+        # one chunk, and the connection is closed immediately afterwards, so a
+        # hostile or misdeclared response cannot exhaust memory.
+        chunks: list[bytes] = []
+        total = 0
+        for chunk in response.iter_bytes(chunk_size=_CHUNK_BYTES):
+            chunks.append(chunk)
+            total += len(chunk)
+            if total >= settings.fetch_max_bytes:
+                break
+        body = b"".join(chunks)[: settings.fetch_max_bytes]
+        encoding = response.encoding or "utf-8"
+    finally:
+        if response is not None:
+            response.close()
+        if http_client is None:
+            # Only close a client this function created; a caller-supplied one
+            # (tests, connection pooling) stays open.
+            client.close()
+
+    title, blocks = extract_readable(body.decode(encoding, errors="replace"))
 
     if not blocks:
         raise FetchError("no_extractable_text")

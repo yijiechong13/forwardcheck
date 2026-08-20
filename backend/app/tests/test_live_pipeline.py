@@ -57,11 +57,13 @@ class FakeLLM:
         self.grade_prompts: list[str] = []
 
     def decompose(self, message, meter):
-        meter.charge_llm_call()
+        meter.begin_llm_operation()
+        meter.charge_llm_request()
         return self._decomposition
 
     def grade(self, pairs_prompt, meter):
-        meter.charge_llm_call()
+        meter.begin_llm_operation()
+        meter.charge_llm_request()
         self.grade_prompts.append(pairs_prompt)
         if not self._gradings:
             raise AssertionError("grade called more times than scripted")
@@ -77,7 +79,8 @@ class FakeSearch:
         self.queries: list[str] = []
 
     def search(self, query, meter, *, limit=5):
-        meter.charge_search()
+        meter.begin_search_operation()
+        meter.charge_search_request()
         self.queries.append(query)
         for needle, results in self._by_query.items():
             if needle in query:
@@ -258,14 +261,15 @@ def test_llm_budget_enforced_across_calls(wire, monkeypatch):
     # Decompose consumed the only allowed call; grading was skipped; abstain.
     assert response.claims[0].verdict == Verdict.INSUFFICIENT.value
     usage = next(s for s in response.pipeline_trace if s.node == "usage")
-    assert usage.details["llmCalls"] == 1
+    assert usage.details["llmRequests"] == 1
 
 
 def test_llm_failure_falls_back_to_deterministic_decomposition(wire):
     class FailingLLM:
         name = "fake:failing"
         def decompose(self, message, meter):
-            meter.charge_llm_call()
+            meter.begin_llm_operation()
+            meter.charge_llm_request()
             raise LLMError("provider", "status 500")
         def grade(self, prompt, meter):
             raise LLMError("provider")
@@ -362,8 +366,11 @@ def test_usage_summary_is_present_and_safe(wire):
          {"https://x.gov.sg/a": GOOD_PAGE})
     response = run_live_verification(MESSAGE)
     usage = next(s for s in response.pipeline_trace if s.node == "usage")
-    assert set(usage.details) >= {"llmCalls", "searches", "fetches", "inputTokens",
-                                  "outputTokens", "cacheHits", "mode"}
+    assert set(usage.details) >= {
+        "llmOperations", "llmRequests", "llmRetries",
+        "searchOperations", "searchRequests", "searchRetries",
+        "fetches", "inputTokens", "outputTokens", "cacheHits", "mode",
+    }
     assert "ANTHROPIC" not in str(usage.details)
 
 

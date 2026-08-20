@@ -127,8 +127,15 @@ export interface TimelineEntry {
 /** Safe per-request usage summary from the pipeline trace. No prompts, no keys. */
 export interface UsageSummary {
   mode: string;
-  llmCalls: number;
-  searches: number;
+  servedFromCache: boolean;
+  /** Logical operations the pipeline requested. */
+  llmOperations: number;
+  searchOperations: number;
+  /** Actual billable provider requests, retries included. */
+  llmRequests: number;
+  llmRetries: number;
+  searchRequests: number;
+  searchRetries: number;
   fetches: number;
   inputTokens: number;
   outputTokens: number;
