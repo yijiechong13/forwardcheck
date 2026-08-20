@@ -29,10 +29,20 @@ A generic fact-checker answers "true or false?" about the whole message — whic
 question, because these messages are usually *partly* true. ForwardCheck decomposes the message
 into atomic claims and gives each one its own verdict, evidence, and confidence.
 
-## Status: Phase 0 (project setup)
+## Status: Phase 1 (frontend mock UI)
 
-Scaffolding and planning docs are in place. Implementation follows in phases 1–6; see
-[LEARNING_LOG.md](LEARNING_LOG.md) for the running build log.
+The full result interface is built and running against static mock data. Backend follows in
+Phase 2; see [LEARNING_LOG.md](LEARNING_LOG.md) for the running build log.
+
+## Running the frontend
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+Open http://localhost:3000 and load one of the three seeded examples.
 
 ## Documentation
 

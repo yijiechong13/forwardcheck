@@ -1,0 +1,154 @@
+@import "tailwindcss";
+
+/*
+ * ForwardCheck design system — monochrome by intent.
+ *
+ * A verification tool should not look like it is cheering. Colour is reserved
+ * almost entirely for the verdict scale, and even there it stays desaturated:
+ * the hierarchy is carried by weight, spacing, and border contrast instead.
+ */
+
+@theme {
+  /* Neutral ramp — the entire palette. */
+  --color-ink-950: #0a0a0a;
+  --color-ink-900: #121212;
+  --color-ink-850: #171717;
+  --color-ink-800: #1f1f1f;
+  --color-ink-700: #2e2e2e;
+  --color-ink-600: #454545;
+  --color-ink-500: #6b6b6b;
+  --color-ink-400: #8f8f8f;
+  --color-ink-300: #b4b4b4;
+  --color-ink-200: #d4d4d4;
+  --color-ink-100: #e8e8e8;
+  --color-ink-50: #f5f5f5;
+  --color-ink-0: #ffffff;
+
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-mono: var(--font-jetbrains-mono), ui-monospace, "SF Mono", Menlo, monospace;
+}
+
+:root {
+  --bg: var(--color-ink-0);
+  --bg-raised: var(--color-ink-0);
+  --bg-sunken: var(--color-ink-50);
+  --fg: var(--color-ink-950);
+  --fg-muted: var(--color-ink-500);
+  --fg-subtle: var(--color-ink-400);
+  --border: var(--color-ink-200);
+  --border-strong: var(--color-ink-300);
+
+  /* Verdict accents. Desaturated on purpose — these are signals, not decoration. */
+  --verdict-supported: #1a1a1a;
+  --verdict-supported-bg: #f0f0f0;
+  --verdict-misleading: #6b5300;
+  --verdict-misleading-bg: #fbf5e2;
+  --verdict-false: #7a1f1f;
+  --verdict-false-bg: #fbeeee;
+  --verdict-outdated: #3f4a5a;
+  --verdict-outdated-bg: #eff1f4;
+  --verdict-insufficient: #5a5a5a;
+  --verdict-insufficient-bg: #f5f5f5;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: var(--color-ink-950);
+    --bg-raised: var(--color-ink-900);
+    --bg-sunken: var(--color-ink-850);
+    --fg: var(--color-ink-50);
+    --fg-muted: var(--color-ink-400);
+    --fg-subtle: var(--color-ink-500);
+    --border: var(--color-ink-800);
+    --border-strong: var(--color-ink-700);
+
+    --verdict-supported: #e8e8e8;
+    --verdict-supported-bg: #1f1f1f;
+    --verdict-misleading: #e8cf8a;
+    --verdict-misleading-bg: #2a2415;
+    --verdict-false: #e8a5a5;
+    --verdict-false-bg: #2a1818;
+    --verdict-outdated: #b8c4d4;
+    --verdict-outdated-bg: #1b1f26;
+    --verdict-insufficient: #b4b4b4;
+    --verdict-insufficient-bg: #1f1f1f;
+  }
+}
+
+:root[data-theme="dark"] {
+  --bg: var(--color-ink-950);
+  --bg-raised: var(--color-ink-900);
+  --bg-sunken: var(--color-ink-850);
+  --fg: var(--color-ink-50);
+  --fg-muted: var(--color-ink-400);
+  --fg-subtle: var(--color-ink-500);
+  --border: var(--color-ink-800);
+  --border-strong: var(--color-ink-700);
+
+  --verdict-supported: #e8e8e8;
+  --verdict-supported-bg: #1f1f1f;
+  --verdict-misleading: #e8cf8a;
+  --verdict-misleading-bg: #2a2415;
+  --verdict-false: #e8a5a5;
+  --verdict-false-bg: #2a1818;
+  --verdict-outdated: #b8c4d4;
+  --verdict-outdated-bg: #1b1f26;
+  --verdict-insufficient: #b4b4b4;
+  --verdict-insufficient-bg: #1f1f1f;
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-bg-raised: var(--bg-raised);
+  --color-bg-sunken: var(--bg-sunken);
+  --color-fg: var(--fg);
+  --color-fg-muted: var(--fg-muted);
+  --color-fg-subtle: var(--fg-subtle);
+  --color-edge: var(--border);
+  --color-edge-strong: var(--border-strong);
+}
+
+* {
+  border-color: var(--border);
+}
+
+body {
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* Tabular figures keep confidence percentages from shifting width. */
+.tnum {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Subtle grid texture behind the hero. Very low contrast by design. */
+.grid-bg {
+  background-image:
+    linear-gradient(to right, var(--border) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--border) 1px, transparent 1px);
+  background-size: 48px 48px;
+  opacity: 0.35;
+}
+
+@keyframes fc-fade-up {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
+
+.animate-fade-up {
+  animation: fc-fade-up 0.32s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-fade-up { animation: none; }
+  * { transition-duration: 0.01ms !important; }
+}
+
+::selection {
+  background: var(--fg);
+  color: var(--bg);
+}
