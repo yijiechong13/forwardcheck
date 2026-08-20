@@ -18,6 +18,28 @@ class Domain(str, Enum):
     UNKNOWN = "unknown"
 
 
+class ClaimAxis(str, Enum):
+    """What *kind* of overstatement a claim can make.
+
+    Status escalation (charged -> convicted) was the original model, but the
+    demo corpus made clear it is one axis of three. A forwarded claim can also
+    overstate:
+
+      * SCOPE     — who or what is covered ("all products" vs one batch,
+                    "every individual" vs per household, "all cats" vs pet cats)
+      * MODALITY  — how certain or automatic a consequence is ("will be fined
+                    $5,000" vs "liable on conviction to a fine up to $5,000")
+
+    These are independent. "Everyone automatically gets jailed for 10 years"
+    overstates scope AND modality while getting the status rung right, and a
+    system that only models rungs will pass it as Supported.
+    """
+
+    STATUS = "status"
+    SCOPE = "scope"
+    MODALITY = "modality"
+
+
 class StatusType(str, Enum):
     # --- Legal ladder ---
     ALLEGATION = "allegation"
@@ -44,6 +66,10 @@ class StatusType(str, Enum):
     ENFORCED = "enforced"
     DEADLINE = "deadline"
     PENALTY = "penalty"
+
+    # --- Scope / eligibility (cuts across domains) ---
+    ELIGIBILITY = "eligibility"
+    RECALL_SCOPE = "recall_scope"
 
     UNKNOWN = "unknown"
 
@@ -92,6 +118,10 @@ POLICY_LADDER: list[StatusType] = [
     StatusType.PENALTY,
 ]
 
+#: Eligibility sits on the policy ladder for domain purposes but is not a rung:
+#: "who qualifies" is a scope question, not a stage of a policy's life.
+POLICY_SCOPE_STATUSES: list[StatusType] = [StatusType.ELIGIBILITY]
+
 LADDERS: dict[Domain, list[StatusType]] = {
     Domain.LEGAL: LEGAL_LADDER,
     Domain.PRODUCT_SAFETY: PRODUCT_SAFETY_LADDER,
@@ -104,6 +134,8 @@ STATUS_DOMAIN: dict[StatusType, Domain] = {
 }
 STATUS_DOMAIN[StatusType.RELEASE] = Domain.LEGAL
 STATUS_DOMAIN[StatusType.BAIL] = Domain.LEGAL
+STATUS_DOMAIN[StatusType.ELIGIBILITY] = Domain.POLICY
+STATUS_DOMAIN[StatusType.RECALL_SCOPE] = Domain.PRODUCT_SAFETY
 
 
 def rung(status: StatusType, domain: Domain | None = None) -> int:
@@ -134,5 +166,33 @@ def is_escalation(claimed: StatusType, supported: StatusType) -> bool:
     return claimed_rung > supported_rung
 
 
+#: Human-facing router labels, shown in the claims table.
+STATUS_LABEL: dict[StatusType, str] = {
+    StatusType.ALLEGATION: "Allegation",
+    StatusType.INVESTIGATION: "Investigation",
+    StatusType.ARREST: "Arrest",
+    StatusType.STATEMENT: "Official statement",
+    StatusType.CHARGE: "Charge",
+    StatusType.CONVICTION: "Conviction",
+    StatusType.SENTENCE: "Sentence",
+    StatusType.RELEASE: "Release",
+    StatusType.BAIL: "Bail",
+    StatusType.ADVISORY: "Advisory",
+    StatusType.WARNING: "Warning",
+    StatusType.OVERSEAS_RECALL: "Overseas recall",
+    StatusType.LOCAL_RECALL: "Singapore recall",
+    StatusType.BAN: "Ban",
+    StatusType.RECALL_SCOPE: "Recall scope",
+    StatusType.PROPOSED: "Proposed",
+    StatusType.PASSED: "Passed",
+    StatusType.EFFECTIVE: "In effect",
+    StatusType.DEADLINE: "Policy deadline",
+    StatusType.ENFORCED: "Enforcement",
+    StatusType.PENALTY: "Penalty",
+    StatusType.ELIGIBILITY: "Eligibility scope",
+    StatusType.UNKNOWN: "Unclassified",
+}
+
+
 def human_label(status: StatusType) -> str:
-    return status.value.replace("_", " ").capitalize()
+    return STATUS_LABEL.get(status, status.value.replace("_", " ").capitalize())

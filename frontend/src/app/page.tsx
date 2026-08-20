@@ -63,7 +63,7 @@ export default function Home() {
             <Section
               index="02"
               title="Extracted claims"
-              description="The message broken into atomic, individually checkable statements. Select a row to see the original wording and how each source was graded."
+              description="The message broken into atomic, individually checkable claims. Select a row to see the original wording and how each source was graded."
             >
               <ClaimsTable claims={result.claims} />
             </Section>
@@ -84,7 +84,7 @@ export default function Home() {
             <Section
               index="04"
               title="Status timeline"
-              description="Where this event actually sits on the status ladder — investigated, charged, convicted; proposed, passed, enforced. Stages with no supporting evidence are marked rather than omitted."
+              description="Where this matter actually sits on the status ladder — investigated, charged, convicted; proposed, passed, enforced; advisory, recall, ban. Stages with no supporting evidence are marked rather than omitted."
             >
               <Timeline timeline={result.timeline} />
             </Section>
@@ -139,19 +139,20 @@ function Header({ apiUp }: { apiUp: boolean | null }) {
           Verify forwarded claims before you pass them on.
         </h1>
         <p className="mt-3.5 max-w-2xl text-[14px] leading-relaxed text-fg-muted">
-          Forwarded messages rarely invent an event. They take a real one and push its
-          status one rung too far — investigated becomes charged, a law that passed
-          becomes a law being enforced, an overseas recall becomes a local one.
-          ForwardCheck decomposes each message into separate status claims, retrieves
-          official or credible Singapore evidence, and gives every claim its own
-          source-backed verdict.
+          Forwarded messages rarely invent an event. They take a real one and overstate
+          it — a maximum fine becomes automatic, one recalled batch becomes every
+          bottle, a payout per household becomes one per person. ForwardCheck SG
+          decomposes each message into separate claims, retrieves official Singapore
+          source evidence, and produces claim-level verdicts with citations, timelines
+          and a correction you can send back.
         </p>
 
         <div className="mt-6 flex flex-wrap items-center gap-x-5 gap-y-1.5 font-mono text-[10px] tracking-[0.14em] text-fg-subtle">
           <span>SINGAPORE</span>
-          <span>LEGAL STATUS</span>
-          <span>PRODUCT SAFETY</span>
           <span>POLICY &amp; REGULATION</span>
+          <span>FINES &amp; ELIGIBILITY</span>
+          <span>RECALLS</span>
+          <span>LEGAL STATUS</span>
           {apiUp === false ? (
             <span
               className="rounded-sm border px-1.5 py-0.5 tracking-normal"
@@ -172,9 +173,9 @@ function Header({ apiUp }: { apiUp: boolean | null }) {
 function EmptyState() {
   const steps = [
     ["Normalise", "Strip forwarding cruft, emoji, and urgency markers."],
-    ["Decompose", "Split the message into atomic checkable claims."],
-    ["Route", "Classify each claim by status type, domain, jurisdiction."],
-    ["Retrieve", "Pull candidate evidence, ranked by source authority."],
+    ["Decompose", "Split into atomic claims — status, scope, and penalty."],
+    ["Route", "Classify by status type, domain, and jurisdiction."],
+    ["Retrieve", "Pull official Singapore evidence, ranked by authority."],
     ["Grade", "Judge each source: supports, refutes, partial, silent."],
     ["Verdict", "Assign per-claim verdicts, then an overall label."],
   ];

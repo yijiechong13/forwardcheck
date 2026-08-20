@@ -94,6 +94,25 @@ def retrieve(state: PipelineState) -> PipelineState:
     dropped_below_threshold: dict[str, int] = {}
     expanded: dict[str, str] = {}
 
+    # Resolve the message's dominant cluster from a whole-message query first.
+    #
+    # Individual claims are short and share vocabulary across clusters — three
+    # recall clusters all say "recall", "batch", "product", and "10 years jail"
+    # matches any statute with that maximum. Left alone, a claim cites the right
+    # verdict from the wrong case, which is indefensible in a tool whose whole
+    # output is citations. The full message disambiguates because it names the
+    # actual subject, so we resolve the cluster once and bias claims toward it.
+    message_results = adapter.search(
+        state.normalised_message or state.raw_message,
+        limit=6,
+    )
+    cluster_scores: Counter[str] = Counter()
+    for doc, score in message_results:
+        cluster_scores[topic_of(doc)] += score
+    message_cluster = (
+        cluster_scores.most_common(1)[0][0] if cluster_scores else None
+    )
+
     for claim in state.claims:
         jurisdiction = (
             claim.jurisdiction
@@ -107,6 +126,17 @@ def retrieve(state: PipelineState) -> PipelineState:
             jurisdiction=jurisdiction,
             status_hint=claim.status_type,
         )
+
+        # Down-weight documents from other clusters rather than excluding them:
+        # an out-of-cluster document can still be the right evidence (an
+        # overseas recall refuting a local one), so this reorders rather than
+        # filters, and a strong cross-cluster match can still win.
+        if message_cluster is not None:
+            results = [
+                (doc, score if topic_of(doc) == message_cluster else score * 0.45)
+                for doc, score in results
+            ]
+            results.sort(key=lambda pair: pair[1], reverse=True)
 
         above_threshold = [
             (doc, score)
@@ -173,6 +203,7 @@ def retrieve(state: PipelineState) -> PipelineState:
             "minScore": settings.retrieval_min_score,
             "droppedBelowThreshold": dropped_below_threshold,
             "clusterExpansion": expanded,
+            "messageCluster": message_cluster,
         },
     )
     return state

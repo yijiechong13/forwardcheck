@@ -2,9 +2,7 @@
 
 ## One-line
 
-ForwardCheck SG is an agentic RAG web app that verifies forwarded public-interest claims by
-decomposing them into status claims, retrieving official or credible evidence, and producing
-source-backed verdicts with timelines.
+ForwardCheck SG is an agentic RAG web app that decomposes forwarded public-interest claims, retrieves official Singapore source evidence, and produces claim-level verdicts with citations, timelines and shareable corrections.
 
 ## What this is NOT
 
@@ -32,6 +30,27 @@ evaluation set that can actually be labelled with confidence.
 `Overseas` remains a representable jurisdiction, because refuting "recalled in Singapore"
 requires evidence that the recall happened somewhere else. It is a foil, not a second market.
 
+## The three axes of overstatement
+
+Status escalation was the original model. The demo corpus made clear it is one axis of three,
+and a system that models only rungs passes two-thirds of real forwards as accurate.
+
+| Axis | What is overstated | Example |
+|---|---|---|
+| **Status** | the stage reached | investigated → charged |
+| **Scope** | who or what is covered | one batch → all products; per household → per person |
+| **Modality** | how certain or automatic | up to $5,000 on conviction → automatically fined $5,000 |
+
+These are independent. "Anyone caught automatically gets 10 years" overstates scope *and*
+modality while getting the status right.
+
+## The four claim categories
+
+1. **Policy / regulatory status** — proposed, passed, in force, enforced
+2. **Fines, penalties, deadlines, eligibility scope** — maximums vs automatic, who qualifies
+3. **Product and food recalls** — Singapore vs overseas, affected batch vs whole product
+4. **Legal / news status** — investigated, arrested, charged, convicted, sentenced
+
 ## The three status domains
 
 ### 1. Legal / news status
@@ -48,22 +67,27 @@ Distinctions that must hold:
 ### 2. Policy / regulatory status
 
 `proposed` → `passed` → `effective` → `deadline` → `enforced` → `penalty`
+plus `eligibility` (a scope status, not a rung)
 
 Distinctions that must hold:
-- proposed vs passed
-- announced vs in force vs enforced
+- proposed vs passed vs in force vs enforced
 - a real deadline vs a misleading one
-- a real fine vs an automatic fine
+- a real fine vs an automatic fine ("up to $5,000 on conviction" ≠ "you will be fined $5,000")
 - scope conditions — all cats vs pet cats, existing owners vs new owners
+- unit of allocation — per household vs per individual
+- eligibility — citizens vs citizens and PRs
+- form of benefit — vouchers vs cash
 
 ### 3. Product / public-safety status
 
 `advisory` → `warning` → `overseas_recall` → `local_recall` → `ban`
+plus `recall_scope` (a scope status, not a rung)
 
 Distinctions that must hold:
 - recalled in Singapore vs recalled overseas only
 - advisory vs recall vs ban
-- affected batch vs whole product line
+- affected batch vs whole product line vs whole brand
+- the stated reason vs an invented one (packaging defect vs "toxins")
 - confirmed official warning vs a news report about one
 
 ## Status-escalation errors we target
@@ -80,6 +104,10 @@ Distinctions that must hold:
 | proposed policy | passed policy |
 | passed policy | in force / enforced |
 | rumour / allegation | official confirmation |
+| $500 per household | $500 for every individual |
+| vouchers | cash |
+| one recalled batch | all products / all brands |
+| precautionary packaging recall | toxin contamination |
 
 ## Verdict labels (closed set)
 

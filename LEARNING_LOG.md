@@ -364,3 +364,74 @@ not the same query, and using one answer for both loses information.
 - *`scamshield.gov.sg` retained in the allowlist.* It is a legitimate official SG source for
   checking whether an advisory exists. Annotated in-code as source authenticity, not scam
   detection, so the distinction survives the next reader.
+
+---
+
+## Refinement — scope and modality axes, five Singapore demo cases
+
+**What was built**
+Four new evidence clusters (CDC vouchers, vaping penalties, infant formula recall, calamine
+recall), a `ClaimAxis` model, scope/modality grading rules, decomposition for compound and causal
+claims, human-readable router labels, and 27 new tests. Corpus 23 → 38 documents; eval 7 → 10
+cases, 16 → 24 gold claims.
+
+**Files changed**
+`backend/app/models/status.py`, `backend/app/data/mock_sources.py`,
+`backend/app/pipeline/{decompose,route,grade,retrieve}.py`,
+`backend/app/tests/{test_scope_modality.py,eval_dataset.json}`,
+`frontend/src/lib/{examples,types,verdict}.ts`, `frontend/src/app/page.tsx`, all five docs.
+
+**What RAG concept this phase teaches**
+
+*Status was one axis of three.* The original model said a forwarded claim overstates the **stage**
+an event reached. The five new cases showed that is a third of the problem. A claim can also
+overstate **scope** (one batch → all products; per household → per person) and **modality**
+(up to $5,000 on conviction → automatically fined). These are independent: *"anyone caught
+automatically gets 10 years"* gets the status rung exactly right and is still false twice over.
+A one-axis model passes those as Supported.
+
+*The bug this exposed was structural, not a missing rule.* Grade rule 4 treated a matching
+`status_asserted` as evidence the claim was **true**. It is not — it means the document is **on
+topic**. A source labelled `eligibility` "supported" *PRs are also eligible* purely by being
+about eligibility, and a news article containing the word "toxins" *because it was denying them*
+supported *the product contains toxins*. Three false `Supported` verdicts, all from one
+conflation.
+
+Two guards fixed it, and both generalise beyond this corpus:
+
+1. **Specificity requirement.** For scope-shaped statuses (`eligibility`, `recall_scope`,
+   `deadline`, `penalty`) the specifics *are* the claim, so support additionally requires the
+   claim's distinctive terms to appear in the source.
+2. **Bounded/unbounded guard.** A source that bounds a fact ("three specified batches") can never
+   *support* a claim that unbounds it ("all milk powder"), even when both carry the same status
+   label. It refutes it.
+
+*Lexical retrieval fails on vocabulary, not on relevance.* The formula cluster was invisible to
+the claim "all NAN and Dumex **milk powder**" because the corpus said "infant **formula**" — zero
+shared content words for two documents about the same event. The fix was making the mock
+documents use the vocabulary real advisories use, which is realism rather than tuning: a real SFA
+notice always names the product form. In production this is precisely what dense retrieval buys.
+
+*Citations must come from the right case.* Three recall clusters share "recall", "batch",
+"product"; "10 years jail" matches any statute with that maximum. Verdicts were right while
+citing the wrong case — indefensible in a tool whose entire output is citations. Fixed by
+resolving the cluster once from the whole message (which names its subject) and biasing claims
+toward it. A new test asserts ≥50% of cited evidence shares one topic.
+
+**What to study next**
+- Natural Language Inference for the bounded/unbounded relation. Every scope rule here is a
+  hand-written entailment pair, which is exactly what an NLI model learns.
+- Quantifier scope in semantics — "all", "every", "any" are the linguistic core of this problem
+  and there is real literature on parsing them.
+- Reranking, which would replace the cluster-bias heuristic with something corpus-independent.
+
+**Trade-offs made**
+- *Scope rules as declarative pairs.* `_SCOPE_MISMATCHES` pairs claim-side over-generalisation
+  with source-side bounding language in a table rather than scattering regexes through the
+  grader. Readable and extendable, but still an enumeration — novel phrasing abstains.
+- *Cluster bias down-weights rather than filters.* An out-of-cluster document can be the right
+  evidence (an overseas recall refuting a local claim), so a strong cross-cluster match can still
+  win. Filtering would have been simpler and wrong.
+- *Two recall clusters instead of one.* Batch over-generalisation is the most common
+  product-safety forward, and one instance is not enough to show a pattern holds rather than
+  being fitted.

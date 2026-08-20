@@ -1,22 +1,30 @@
 {
   "version": "1.0",
-  "note": "Gold labels for the seeded Singapore evidence corpus. These are regression guards, not a generalisation estimate — the corpus was built for these cases. See EVAL_PLAN.md.",
+  "note": "Gold labels for the seeded Singapore evidence corpus. Demo messages are synthetic forwarded-style claims derived from real Singapore public information, not private messages. These are regression guards, not a generalisation estimate. See EVAL_PLAN.md.",
   "cases": [
     {
       "id": "cat-licensing",
-      "description": "Real licensing deadline wrapped in a fabricated automatic fine and a false scope extension.",
-      "message": "⚠️ URGENT ⚠️ From 1 Sept, HDB cat owners with more than 2 cats will be fined $5,000 and AVS will remove the extra cats. All cats, including community cats, must be licensed by 31 Aug. Please forward to all cat owners 🐱🙏",
+      "description": "Policy: a real licensing deadline wrapped in an automatic fine, a removal threat, and a false scope extension to community cats.",
+      "message": "From 1 Sept, HDB cat owners with more than 2 cats will automatically be fined $5,000 and AVS will remove the extra cats. All cats, including community cats, must be licensed by 31 Aug.",
       "expectedOverallVerdict": "Misleading",
       "expectedJurisdiction": "Singapore",
       "expectedDomain": "policy",
       "expectedClaims": [
         {
-          "gist": "owners with more than 2 cats will be fined $5,000",
+          "gist": "cats must be licensed by 31 Aug",
+          "statusType": "deadline",
+          "verdict": "Supported",
+          "isEscalation": false,
+          "requiresCitation": true,
+          "note": "Pet cat licensing deadline is genuine."
+        },
+        {
+          "gist": "owners with more than 2 cats will automatically be fined $5,000",
           "statusType": "penalty",
           "verdict": "Misleading",
           "isEscalation": true,
           "requiresCitation": true,
-          "note": "$5,000 is a maximum court penalty, not an automatic fine."
+          "note": "Up to $5,000 on conviction, not automatic."
         },
         {
           "gist": "AVS will remove the extra cats",
@@ -24,15 +32,7 @@
           "verdict": "Misleading",
           "isEscalation": true,
           "requiresCitation": true,
-          "note": "Source states owners will not be required to give up cats."
-        },
-        {
-          "gist": "cats must be licensed by 31 Aug",
-          "statusType": "deadline",
-          "verdict": "Supported",
-          "isEscalation": false,
-          "requiresCitation": true,
-          "note": "The pet cat licensing deadline is genuine."
+          "note": "Existing cats may be kept if licensed."
         },
         {
           "gist": "community cats must be licensed",
@@ -40,7 +40,7 @@
           "verdict": "Misleading",
           "isEscalation": false,
           "requiresCitation": true,
-          "note": "Licensing applies to owned pet cats; community cats are out of scope."
+          "note": "Licensing applies to pet cats; community cats are managed separately."
         }
       ]
     },
@@ -149,32 +149,6 @@
       ]
     },
     {
-      "id": "recall-scope-escalation",
-      "description": "Product-safety escalation: an overseas batch recall reported as a Singapore-wide recall of the whole product line.",
-      "message": "URGENT: This snack product has been recalled in Singapore and taken off all shelves. The whole product line is affected. Please forward to your family.",
-      "expectedOverallVerdict": "Misleading",
-      "expectedJurisdiction": "Singapore",
-      "expectedDomain": "product_safety",
-      "expectedClaims": [
-        {
-          "gist": "product has been recalled in Singapore",
-          "statusType": "local_recall",
-          "verdict": "Misleading",
-          "isEscalation": true,
-          "requiresCitation": true,
-          "note": "The recall was overseas and batch-limited. SFA issued an advisory, not a recall."
-        },
-        {
-          "gist": "the whole product line is affected",
-          "statusType": "local_recall",
-          "verdict": "Misleading",
-          "isEscalation": true,
-          "requiresCitation": true,
-          "note": "Only the batches listed by the overseas regulator are affected."
-        }
-      ]
-    },
-    {
       "id": "policy-stage-escalation",
       "description": "Policy escalation: a law that has passed reported as already in force with immediate fines.",
       "message": "The new workplace fairness law has passed and fines start immediately. Employers who discriminate will be fined from this month. Forward this.",
@@ -197,6 +171,126 @@
           "isEscalation": true,
           "requiresCitation": true,
           "note": "A transition period applies; enforcement does not begin on passage."
+        }
+      ]
+    },
+    {
+      "id": "cdc-vouchers",
+      "description": "Policy/eligibility: real scheme and amount, wrong unit of allocation, wrong form, invented eligibility and deadline.",
+      "message": "Every Singaporean will get $500 CDC vouchers in cash this month, including PRs. Must claim by Sunday or lose it.",
+      "expectedOverallVerdict": "Misleading",
+      "expectedJurisdiction": "Singapore",
+      "expectedDomain": "policy",
+      "expectedClaims": [
+        {
+          "gist": "every Singaporean will get $500 CDC vouchers",
+          "statusType": "eligibility",
+          "verdict": "Misleading",
+          "isEscalation": true,
+          "requiresCitation": true,
+          "note": "$500 is per household, not per individual."
+        },
+        {
+          "gist": "the vouchers are given as cash",
+          "statusType": "eligibility",
+          "verdict": "Misleading",
+          "isEscalation": false,
+          "requiresCitation": true,
+          "note": "Vouchers are not a cash payout."
+        },
+        {
+          "gist": "PRs are also eligible",
+          "statusType": "eligibility",
+          "verdict": "Insufficient evidence",
+          "isEscalation": false,
+          "requiresCitation": false,
+          "note": "Source says Singaporean households; PR eligibility is not addressed."
+        },
+        {
+          "gist": "must claim by Sunday",
+          "statusType": "deadline",
+          "verdict": "Insufficient evidence",
+          "isEscalation": false,
+          "requiresCitation": false,
+          "note": "No source states a one-week claim deadline."
+        }
+      ]
+    },
+    {
+      "id": "vaping-penalties",
+      "description": "Legal/penalty: a real commencement date, with an invented automatic jail term applied to all offenders.",
+      "message": "From 1 May 2026, anyone caught with vapes or Kpods will automatically go to jail for 10 years.",
+      "expectedOverallVerdict": "Misleading",
+      "expectedJurisdiction": "Singapore",
+      "expectedDomain": "policy",
+      "expectedClaims": [
+        {
+          "gist": "anyone caught will automatically go to jail",
+          "statusType": "penalty",
+          "verdict": "Misleading",
+          "isEscalation": true,
+          "requiresCitation": true,
+          "note": "Maximum on conviction; possession/use treated differently from supply."
+        },
+        {
+          "gist": "the jail term is 10 years",
+          "statusType": "penalty",
+          "verdict": "Misleading",
+          "isEscalation": true,
+          "requiresCitation": true,
+          "note": "A stated maximum is not an automatic term."
+        }
+      ]
+    },
+    {
+      "id": "formula-recall",
+      "description": "Product safety: a real batch recall over-scoped to two entire brands, with an invented reason.",
+      "message": "All NAN and Dumex milk powder in Singapore has been recalled because it contains toxins. Don't buy any.",
+      "expectedOverallVerdict": "Misleading",
+      "expectedJurisdiction": "Singapore",
+      "expectedDomain": "product_safety",
+      "expectedClaims": [
+        {
+          "gist": "all NAN and Dumex milk powder has been recalled",
+          "statusType": "local_recall",
+          "verdict": "Misleading",
+          "isEscalation": true,
+          "requiresCitation": true,
+          "note": "Recall covers three specified batches of one product."
+        },
+        {
+          "gist": "the product contains toxins",
+          "statusType": "recall_scope",
+          "verdict": "False",
+          "isEscalation": false,
+          "requiresCitation": true,
+          "note": "Recall was precautionary, related to packaging, not contamination."
+        }
+      ]
+    },
+    {
+      "id": "calamine-recall",
+      "description": "Product safety: a genuine single-batch cadmium recall, over-scoped to all bottles.",
+      "message": "Guardian calamine lotion contains cadmium. Throw away all bottles immediately.",
+      "expectedOverallVerdict": "Misleading",
+      "expectedJurisdiction": "Singapore",
+      "expectedDomain": "product_safety",
+      "expectedClaims": [
+        {
+          "gist": "calamine lotion contains cadmium",
+          "statusType": "recall_scope",
+          "verdict": "Supported",
+          "isEscalation": false,
+          "requiresCitation": true,
+          "note": "Cadmium above limits was detected in one batch."
+        },
+        {
+          "gist": "throw away all bottles",
+          "statusType": "recall_scope",
+          "verdict": "Misleading",
+          "isEscalation": true,
+          "requiresCitation": true,
+          "note": "Only one batch is recalled; other batches need not be discarded."
         }
       ]
     }

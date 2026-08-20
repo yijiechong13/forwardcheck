@@ -104,6 +104,22 @@ against. When the Anthropic adapter lands, we can measure whether it actually be
 as an ordered ladder. "Escalation" is then a computable property: the claim asserts a rung the
 evidence does not reach. This is what makes the product more than keyword matching.
 
+**Three axes, not one.** `ClaimAxis` names what a claim can overstate: STATUS (the rung), SCOPE
+(who or what is covered), and MODALITY (how automatic a consequence is). Modelling only status
+would pass "all bottles are affected" and "everyone gets $500" as accurate, because both get the
+rung right. `_SCOPE_MISMATCHES` in `grade.py` pairs claim-side over-generalisation with the
+source-side language that bounds it.
+
+**Status agreement is topicality, not agreement.** A source labelled `eligibility` does not
+support "PRs are eligible" merely by being about eligibility. For scope-shaped statuses
+(`eligibility`, `recall_scope`, `deadline`, `penalty`) the specifics *are* the claim, so support
+additionally requires the claim's distinctive terms to appear in the source. Without this guard,
+every claim in a well-retrieved cluster comes back Supported.
+
+**Bounded sources never support unbounded claims.** "Three specified batches have been recalled"
+and "all milk powder has been recalled" are both `local_recall` claims. Treating the first as
+support for the second is how a real, narrow recall becomes a false, sweeping one.
+
 **Closed verdict vocabulary.** Five labels only. Free-text verdicts cannot be evaluated.
 
 **Abstention is a real branch.** If retrieval returns nothing above threshold, the verdict is

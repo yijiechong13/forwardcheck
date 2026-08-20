@@ -512,6 +512,318 @@ POLICY_STAGE: list[Evidence] = [
     ),
 ]
 # ---------------------------------------------------------------------------
+# Cluster 6 — CDC vouchers (policy / Singapore)
+#
+# Tests SCOPE and MODALITY rather than status rung:
+#   household -> every individual     (scope)
+#   vouchers  -> cash                 (substance)
+#   citizens  -> citizens and PRs     (eligibility scope)
+# The amount and the scheme are real; almost everything around them is not.
+# No document states a claim deadline, so that claim must abstain.
+# ---------------------------------------------------------------------------
+
+CDC_VOUCHERS: list[Evidence] = [
+    _doc(
+        id="sg-govsg-501",
+        title="CDC Vouchers 2026: $500 for every Singaporean household",
+        publisher="GovSG / Ministry of Finance",
+        tier=SourceTier.OFFICIAL,
+        jurisdiction=Jurisdiction.SINGAPORE,
+        published_at="2026-01-03",
+        snippet=(
+            "Every Singaporean household will receive $500 in CDC Vouchers. "
+            "The vouchers are allocated per household, not per individual, and "
+            "one member of the household claims on the household's behalf. "
+            "The vouchers may be used at participating heartland merchants, "
+            "hawkers and supermarkets."
+        ),
+        status_asserted=StatusType.EFFECTIVE,
+        topic="cdc-vouchers",
+        url_slug="govsg/cdc-vouchers-2026",
+    ),
+    _doc(
+        id="sg-govsg-502",
+        title="CDC Vouchers: eligibility and how to claim",
+        publisher="GovSG",
+        tier=SourceTier.OFFICIAL,
+        jurisdiction=Jurisdiction.SINGAPORE,
+        published_at="2026-01-03",
+        snippet=(
+            "Singaporean households are eligible for the vouchers. Each "
+            "household claims once. The vouchers are not a cash payout and "
+            "cannot be withdrawn, transferred or exchanged for cash; they are "
+            "digital vouchers redeemed at participating merchants."
+        ),
+        status_asserted=StatusType.ELIGIBILITY,
+        topic="cdc-vouchers",
+        url_slug="govsg/cdc-vouchers-eligibility",
+    ),
+    _doc(
+        id="sg-govsg-503",
+        title="Claim period for CDC Vouchers 2026",
+        publisher="GovSG",
+        tier=SourceTier.OFFICIAL,
+        jurisdiction=Jurisdiction.SINGAPORE,
+        published_at="2026-01-03",
+        snippet=(
+            "Vouchers remain valid until the stated expiry date at the end of "
+            "the year. Households have the full validity period in which to "
+            "claim and spend them. There is no requirement to claim within a "
+            "single week."
+        ),
+        status_asserted=StatusType.DEADLINE,
+        topic="cdc-vouchers",
+        url_slug="govsg/cdc-vouchers-claim-period",
+    ),
+    _doc(
+        id="sg-news-504",
+        title="What to know about this year's CDC vouchers",
+        publisher="Channel NewsAsia",
+        tier=SourceTier.CREDIBLE_NEWS,
+        jurisdiction=Jurisdiction.SINGAPORE,
+        published_at="2026-01-04",
+        snippet=(
+            "The $500 is given per Singaporean household rather than to each "
+            "person. Officials reminded the public that the vouchers are not "
+            "cash and that messages claiming otherwise are inaccurate."
+        ),
+        status_asserted=StatusType.EFFECTIVE,
+        topic="cdc-vouchers",
+        url_slug="news/cdc-vouchers-explainer",
+    ),
+]
+
+
+# ---------------------------------------------------------------------------
+# Cluster 7 — Vaping / Kpod penalties (legal + policy / Singapore)
+#
+# Tests MODALITY hardest: the penalty regime genuinely changed, and the
+# statutory maximum genuinely exists. The escalation is "up to, on conviction,
+# for supply offences" -> "automatic, for anyone caught".
+# ---------------------------------------------------------------------------
+
+VAPING_PENALTIES: list[Evidence] = [
+    _doc(
+        id="sg-moh-601",
+        title="Enhanced penalties for vaping offences take effect 1 May 2026",
+        publisher="Ministry of Health / Health Sciences Authority",
+        tier=SourceTier.OFFICIAL,
+        jurisdiction=Jurisdiction.SINGAPORE,
+        published_at="2026-04-20",
+        snippet=(
+            "Enhanced penalties for offences involving e-vaporisers take effect "
+            "on 1 May 2026. The changes increase the maximum penalties available "
+            "to the court, particularly for import, distribution and sale."
+        ),
+        status_asserted=StatusType.EFFECTIVE,
+        topic="vaping-penalties",
+        url_slug="moh/vaping-penalties-effective",
+    ),
+    _doc(
+        id="sg-hsa-602",
+        title="Penalties for possession and use of e-vaporisers",
+        publisher="Health Sciences Authority",
+        tier=SourceTier.OFFICIAL,
+        jurisdiction=Jurisdiction.SINGAPORE,
+        published_at="2026-04-20",
+        snippet=(
+            "Possession or use of an e-vaporiser is an offence and offenders "
+            "are liable to a fine. Possession and use are dealt with by "
+            "composition or a fine in the first instance and are treated "
+            "differently from import, distribution and sale, which attract "
+            "substantially heavier penalties including imprisonment."
+        ),
+        status_asserted=StatusType.PENALTY,
+        topic="vaping-penalties",
+        url_slug="hsa/vaping-possession-penalties",
+    ),
+    _doc(
+        id="sg-sso-603",
+        title="Statutory maximum penalties for e-vaporiser supply offences",
+        publisher="Singapore Statutes Online",
+        tier=SourceTier.PRIMARY,
+        jurisdiction=Jurisdiction.SINGAPORE,
+        published_at="2026-05-01",
+        snippet=(
+            "A person guilty of an offence relating to the import or "
+            "distribution of prohibited tobacco products shall be liable on "
+            "conviction to a fine or to imprisonment for a term not exceeding "
+            "the stated maximum, or to both. The term stated is a maximum "
+            "available to the court on conviction. Sentences are determined "
+            "case by case; imprisonment is not automatic and does not follow "
+            "from being caught in possession."
+        ),
+        status_asserted=StatusType.PENALTY,
+        topic="vaping-penalties",
+        url_slug="sso/tobacco-control-penalties",
+    ),
+    _doc(
+        id="sg-hsa-604",
+        title="Kpods and etomidate-laced vaporisers: enforcement approach",
+        publisher="Health Sciences Authority",
+        tier=SourceTier.OFFICIAL,
+        jurisdiction=Jurisdiction.SINGAPORE,
+        published_at="2026-04-25",
+        snippet=(
+            "Vaporisers containing controlled substances are treated more "
+            "severely than standard e-vaporisers. Penalties differ by offence "
+            "type and by the substance involved. Users identified may be "
+            "referred for cessation or rehabilitation rather than prosecuted, "
+            "depending on the circumstances."
+        ),
+        status_asserted=StatusType.ENFORCED,
+        topic="vaping-penalties",
+        url_slug="hsa/kpods-enforcement",
+    ),
+]
+
+
+# ---------------------------------------------------------------------------
+# Cluster 8 — Infant formula recall (product_safety / Singapore)
+#
+# A real recall, over-scoped. Specific batches of one product were recalled;
+# the forward extends that to every product from two brands, and invents the
+# reason. Tests: affected batch -> all products, and reason substitution.
+# ---------------------------------------------------------------------------
+
+FORMULA_RECALL: list[Evidence] = [
+    _doc(
+        id="sg-sfa-701",
+        title="Recall of specific batches of infant milk formula powder",
+        publisher="Singapore Food Agency (SFA)",
+        tier=SourceTier.OFFICIAL,
+        jurisdiction=Jurisdiction.SINGAPORE,
+        published_at="2026-06-18",
+        snippet=(
+            "SFA has directed a recall of three specified batches of one infant "
+            "milk formula powder product following a packaging integrity issue identified "
+            "during routine checks. The recall is limited to the batch numbers "
+            "and best-before dates listed. Other batches of the same product, "
+            "and other products from the same brand, are not affected and "
+            "remain on sale."
+        ),
+        status_asserted=StatusType.LOCAL_RECALL,
+        topic="formula-recall",
+        url_slug="sfa/infant-formula-batch-recall",
+    ),
+    _doc(
+        id="sg-sfa-702",
+        title="Affected infant milk powder batches: details and consumer guidance",
+        publisher="Singapore Food Agency (SFA)",
+        tier=SourceTier.OFFICIAL,
+        jurisdiction=Jurisdiction.SINGAPORE,
+        published_at="2026-06-18",
+        snippet=(
+            "Consumers who have purchased the affected milk powder batches may "
+            "return them for a refund. Consumers are not advised to discard unaffected "
+            "products. There is no evidence of toxin contamination; the recall "
+            "was precautionary and related to packaging, not to the contents."
+        ),
+        status_asserted=StatusType.RECALL_SCOPE,
+        topic="formula-recall",
+        url_slug="sfa/infant-formula-affected-batches",
+    ),
+    _doc(
+        id="sg-hsa-703",
+        title="No safety concern identified for other infant milk powder brands",
+        publisher="Health Sciences Authority",
+        tier=SourceTier.OFFICIAL,
+        jurisdiction=Jurisdiction.SINGAPORE,
+        published_at="2026-06-20",
+        snippet=(
+            "Testing did not identify any contamination in other batches or "
+            "in other brands of infant milk formula powder available in Singapore. No "
+            "recall has been issued for other brands, and no brand-wide recall "
+            "has been ordered."
+        ),
+        status_asserted=StatusType.ADVISORY,
+        topic="formula-recall",
+        url_slug="hsa/infant-formula-testing",
+    ),
+    _doc(
+        id="sg-news-704",
+        title="Only specific infant milk powder batches recalled in Singapore, agency clarifies",
+        publisher="The Straits Times",
+        tier=SourceTier.CREDIBLE_NEWS,
+        jurisdiction=Jurisdiction.SINGAPORE,
+        published_at="2026-06-19",
+        snippet=(
+            "The agency clarified that only the listed batches are affected, "
+            "after messages circulated claiming all products from two brands "
+            "had been recalled over toxins. Those claims are inaccurate."
+        ),
+        status_asserted=StatusType.RECALL_SCOPE,
+        topic="formula-recall",
+        url_slug="news/infant-formula-batches-clarified",
+    ),
+]
+
+
+# ---------------------------------------------------------------------------
+# Cluster 9 — Calamine lotion recall (product_safety / Singapore)
+#
+# Same shape as cluster 8 at a smaller scale: one affected batch of one
+# product, forwarded as "all bottles". Included because batch-scope
+# over-generalisation is the single most common product-safety forward, and
+# one instance is not enough to show the pattern holds.
+# ---------------------------------------------------------------------------
+
+CALAMINE_RECALL: list[Evidence] = [
+    _doc(
+        id="sg-hsa-801",
+        title="Recall of one batch of calamine lotion following heavy metal test",
+        publisher="Health Sciences Authority",
+        tier=SourceTier.OFFICIAL,
+        jurisdiction=Jurisdiction.SINGAPORE,
+        published_at="2026-05-09",
+        snippet=(
+            "HSA has recalled one batch of a calamine lotion product after "
+            "testing detected cadmium above permissible limits in that batch. "
+            "The recall applies to the single batch number listed. Other "
+            "batches of the product tested within permissible limits and are "
+            "not subject to recall."
+        ),
+        status_asserted=StatusType.LOCAL_RECALL,
+        topic="calamine-recall",
+        url_slug="hsa/calamine-batch-recall",
+    ),
+    _doc(
+        id="sg-hsa-802",
+        title="Consumer guidance: identifying the affected calamine batch",
+        publisher="Health Sciences Authority",
+        tier=SourceTier.OFFICIAL,
+        jurisdiction=Jurisdiction.SINGAPORE,
+        published_at="2026-05-09",
+        snippet=(
+            "Consumers should check the batch number printed on the bottle "
+            "against the affected batch listed. Bottles from other batches do "
+            "not need to be discarded. Consumers with the affected batch may "
+            "return it to the point of purchase."
+        ),
+        status_asserted=StatusType.RECALL_SCOPE,
+        topic="calamine-recall",
+        url_slug="hsa/calamine-consumer-guidance",
+    ),
+    _doc(
+        id="sg-news-803",
+        title="One calamine lotion batch recalled over cadmium levels",
+        publisher="Channel NewsAsia",
+        tier=SourceTier.CREDIBLE_NEWS,
+        jurisdiction=Jurisdiction.SINGAPORE,
+        published_at="2026-05-10",
+        snippet=(
+            "The authority said the recall covers a single batch. Messages "
+            "urging people to discard all bottles of the product go beyond "
+            "what the recall states."
+        ),
+        status_asserted=StatusType.RECALL_SCOPE,
+        topic="calamine-recall",
+        url_slug="news/calamine-batch-recall",
+    ),
+]
+
+
+# ---------------------------------------------------------------------------
 # The store
 # ---------------------------------------------------------------------------
 
@@ -521,6 +833,10 @@ ALL_EVIDENCE: list[Evidence] = [
     *ROCKY_CASE,
     *PRODUCT_RECALL,
     *POLICY_STAGE,
+    *CDC_VOUCHERS,
+    *VAPING_PENALTIES,
+    *FORMULA_RECALL,
+    *CALAMINE_RECALL,
 ]
 
 EVIDENCE_BY_ID: dict[str, Evidence] = {doc.id: doc for doc in ALL_EVIDENCE}

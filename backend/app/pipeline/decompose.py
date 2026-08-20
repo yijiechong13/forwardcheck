@@ -60,6 +60,7 @@ _NON_CHECKABLE = [
     r"\?\s*$",  # questions assert nothing
     r"^\s*(?:i think|in my opinion|imo|scary|so sad|omg|wow)\b",
     r"^\s*(?:stay safe|be careful|take care|god bless)\b",
+    r"^\s*(?:don'?t buy any|do not buy any)\s*\.?\s*$",
     r"^\s*\W*$",  # punctuation-only residue
 ]
 
@@ -99,18 +100,108 @@ def _split_scope_appositive(sentence: str) -> list[str] | None:
     return [f"{head} {tail}", f"{scope} {tail}"]
 
 
+# Causal clauses assert a separate, independently checkable fact. "All milk
+# powder has been recalled because it contains toxins" claims both a recall and
+# a reason, and the reason is frequently the invented part.
+_REASON_SPLIT = re.compile(
+    r"^(?P<head>.+?)\s+(?:because|due to|after it was found|as it)\s+(?P<reason>.+)$",
+    re.IGNORECASE,
+)
+
+# Compound assertions that bundle a substance claim with a scope or eligibility
+# claim into one sentence. Splitting them is what lets the CDC voucher message
+# get four different verdicts instead of one averaged-out verdict.
+#
+# "$500 CDC vouchers in cash this month, including PRs" asserts the scheme, the
+# form (cash), and the eligibility (PRs) — three claims with three answers.
+_INCLUSION_SPLIT = re.compile(
+    r",\s*(?:including|even|also\s+for|and\s+also)\s+(?P<group>[A-Za-z][^,.]{2,40})"
+    r"(?P<tail>[,.]|\s*$)",
+    re.IGNORECASE,
+)
+
+#: A sentence asserting both that a consequence is automatic and that it has a
+#: specific magnitude bundles two claims. "Automatically jailed" and "for 10
+#: years" are separately checkable, and typically only one of them is wrong.
+_AUTOMATIC_TERM_SPLIT = re.compile(
+    r"^(?P<head>.*?\b(?:automatic(?:ally)?|will\s+be)\b.*?)\s+"
+    r"(?:for|of)\s+(?P<term>\d+\s+(?:years?|months?|weeks?)"
+    r"|\$[\d,]+)\s*\.?$",
+    re.IGNORECASE,
+)
+
+_CASH_FORM = re.compile(
+    r"\b(?:in|as|of)\s+cash\b|\bcash\s+(?:payout|handout|payment)\b", re.IGNORECASE
+)
+
+
+def _split_compound_assertions(sentence: str) -> list[str]:
+    """Pull bundled scope/eligibility/form assertions out of one sentence.
+
+    Returns the sentence unchanged (as a single-item list) when nothing splits,
+    so the caller can treat the result uniformly.
+    """
+    parts: list[str] = []
+    remainder = sentence.strip()
+
+    # "..., including PRs" -> separate eligibility claim.
+    inclusion = _INCLUSION_SPLIT.search(remainder)
+    if inclusion:
+        group = inclusion.group("group").strip()
+        remainder = (
+            remainder[: inclusion.start()] + remainder[inclusion.end() :]
+        ).strip().rstrip(",")
+        parts.append(f"{group} are also eligible.")
+
+    # "$500 vouchers in cash" -> separate claim about the form of the benefit.
+    if _CASH_FORM.search(remainder):
+        subject = re.sub(
+            r"\s*\b(?:in|as)\s+cash\b", "", remainder, flags=re.IGNORECASE
+        ).strip()
+        benefit = re.search(
+            r"\b((?:\$[\d,]+\s+)?[A-Za-z]{2,}(?:\s+[A-Za-z]{2,}){0,2}\s*vouchers?)\b",
+            remainder,
+            re.IGNORECASE,
+        )
+        noun = benefit.group(1).strip() if benefit else "the payout"
+        parts.append(f"The {noun} are given as cash.")
+        remainder = subject
+
+    # "... will automatically go to jail for 10 years" -> the automaticity and
+    # the magnitude become separate claims.
+    term_match = _AUTOMATIC_TERM_SPLIT.match(remainder)
+    if term_match:
+        head = term_match.group("head").strip()
+        term = term_match.group("term").strip()
+        # Phrase the magnitude claim as a penalty assertion rather than
+        # reusing the head's subject, which produces "anyone faces 10 years"
+        # for a claim that is really about the length of the term itself.
+        unit = "fine" if term.startswith("$") else "jail term"
+        parts.append(f"The {unit} is {term}.")
+        remainder = head
+
+    parts.insert(0, remainder)
+    return [p for p in parts if p.strip()]
+
+
 def _is_checkable(fragment: str) -> bool:
     if len(fragment.strip()) < _MIN_CLAIM_CHARS:
         return False
     if any(re.search(p, fragment, re.IGNORECASE) for p in _NON_CHECKABLE):
         return False
-    # A claim needs a verb to assert anything.
+    # A claim needs a verb to assert anything. This list covers three kinds:
+    # auxiliaries, status verbs, and — added for product-safety forwards —
+    # composition claims ("contains cadmium") and consumer directives ("throw
+    # away all bottles"), both of which are checkable against a recall notice.
     return bool(
         re.search(
             r"\b(?:is|are|was|were|will|has|have|had|must|may|can|been|being|"
             r"faces?|faced|remains?|becomes?|said|says|announced|issued|"
             r"charged|convicted|sentenced|arrested|investigated|banned|"
-            r"recalled|fined|removed?|licensed|passed|takes?|took)\b",
+            r"recalled|fined|removed?|licensed|passed|takes?|took|"
+            r"contains?|contained|affects?|affected|eligible|receives?|"
+            r"gets?|given|expires?|jailed|caught|"
+            r"throw|discard|stop|avoid|return|check)\b",
             fragment,
             re.IGNORECASE,
         )
@@ -158,6 +249,36 @@ def decompose(state: PipelineState) -> PipelineState:
             for part in scope_split:
                 if _is_checkable(part):
                     fragments.append((_tidy(part), sentence))
+            continue
+
+        reason_match = _REASON_SPLIT.match(sentence.strip())
+        if reason_match:
+            head = reason_match.group("head").strip()
+            reason = reason_match.group("reason").strip()
+            # The reason clause often carries its own pronoun subject ("because
+            # *it* contains toxins"). Resolve that pronoun to the head's subject
+            # rather than prepending a second one, which would produce "The
+            # product it contains toxins".
+            subject = _leading_subject(head) or "The product"
+            resolved = re.sub(
+                r"^(?:it|they|these|those|this)\s+", "", reason, flags=re.IGNORECASE
+            )
+            if resolved != reason:
+                reason_claim = f"{subject} {resolved}"
+            else:
+                reason_claim = reason
+            for part in (head, reason_claim):
+                if _is_checkable(part):
+                    fragments.append((_tidy(part), sentence))
+            continue
+
+        compound = _split_compound_assertions(sentence)
+        if len(compound) > 1:
+            for part in compound:
+                for sub in _CLAUSE_SPLIT.split(part):
+                    sub = sub.strip()
+                    if sub and _is_checkable(sub):
+                        fragments.append((_tidy(sub), sentence))
             continue
 
         parts = _CLAUSE_SPLIT.split(sentence)

@@ -66,22 +66,33 @@ an unknown source with an invented authority level corrupts the ranking every ve
 
 ## Seeded evidence clusters
 
-`backend/app/data/mock_sources.py` ships five clusters, one per demo claim plus a legal case:
+`backend/app/data/mock_sources.py` ships nine clusters (38 documents). Every document carries:
+source title, publisher organisation, tier, jurisdiction, publication date, URL placeholder,
+evidence snippet, and the status it asserts.
 
-1. **`cat-licensing`** (policy) — AVS/NParks pet cat licensing: the deadline, the cap per HDB
-   flat, the *maximum* penalty under the Animals and Birds Act, grandfathering for existing
-   owners, and community cats being out of scope.
-2. **`ns-enlistment`** (legal) — arrest and charge are documented; conviction and sentence are
-   **deliberately absent**, plus a statute stating a *maximum* penalty.
-3. **`rocky-case`** (legal) — investigation opened, agency statement, case referred to AGC for
-   review. **No charge document exists.**
-4. **`product-recall`** (product safety) — an overseas batch recall, plus SFA and HSA advisories
-   stating no local recall and no ban. **No Singapore recall document exists.**
-5. **`policy-stage`** (policy) — consultation and passage in Parliament, plus a transition-period
-   notice. **No commencement or enforcement document exists.**
+| Cluster | Domain | What it establishes — and what it deliberately does not |
+|---|---|---|
+| `cat-licensing` | policy | Licensing deadline and cap are real. The $5,000 is a **maximum on conviction**; existing owners keep their cats; community cats are out of scope. |
+| `cdc-vouchers` | policy | $500 is real, **per household**, as vouchers not cash. **Silent on PR eligibility** and on any one-week deadline. |
+| `vaping-penalties` | policy/legal | Penalty change from 1 May 2026 is real. Maximums are **available to the court**; possession is treated differently from supply. **No automatic jail.** |
+| `formula-recall` | product safety | **Three specified batches** of one product, recalled for a **packaging defect**. Explicitly **no toxin contamination**, no brand-wide recall. |
+| `calamine-recall` | product safety | **One batch** with cadmium above limits. Other batches tested within limits and **need not be discarded**. |
+| `product-recall` | product safety | An overseas batch recall; SFA/HSA advisories. **No Singapore recall, no ban.** |
+| `policy-stage` | policy | Consultation and passage in Parliament. **No commencement, no enforcement.** |
+| `ns-enlistment` | legal | Arrest and charge documented. **No conviction, no sentence.** |
+| `rocky-case` | legal | Investigation and agency statement; referred to AGC. **No charge.** |
 
-The absences are the point. A verification system is only interesting if the evidence store can
-fail to answer, and four of the five clusters are built so that the honest answer is partial.
+The absences are the point, and the bolded negatives above are what most demo messages assert.
+A verification system is only interesting if the evidence store can fail to answer — every
+cluster is built so that at least one claim in its demo message must come back partial or
+abstaining.
+
+## Vocabulary note
+
+Mock documents deliberately use the vocabulary real advisories use ("infant milk formula
+powder", not just "infant formula"). This is realism rather than retrieval tuning: a real SFA
+notice always names the product form, and a corpus that omits it makes lexical retrieval look
+worse than it would be in production.
 
 ## Adding a source later
 

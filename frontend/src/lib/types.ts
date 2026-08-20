@@ -54,6 +54,9 @@ export type StatusType =
   | "enforced"
   | "deadline"
   | "penalty"
+  // scope statuses — cut across domains, not rungs on any ladder
+  | "eligibility"
+  | "recall_scope"
   | "unknown";
 
 /** How a single evidence document relates to a single claim. */

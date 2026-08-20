@@ -52,7 +52,7 @@ export function InputPanel({
           <div className="mb-2 font-mono text-[10px] tracking-[0.18em] text-fg-subtle">
             OR TRY A SEEDED EXAMPLE
           </div>
-          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
             {EXAMPLE_CLAIMS.map((example) => (
               <button
                 key={example.id}
@@ -88,7 +88,8 @@ export function InputPanel({
 
         <div className="mt-4 flex items-center justify-between gap-4 border-t border-edge pt-4">
           <p className="text-[11px] leading-snug text-fg-subtle">
-            Runs a 7-step evidence pipeline. Nothing is stored.
+            Runs a 7-step evidence pipeline against official Singapore sources.
+            Nothing is stored.
           </p>
           <button
             type="button"

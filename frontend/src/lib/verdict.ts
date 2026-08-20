@@ -71,9 +71,43 @@ export const DOMAIN_LABEL: Record<Domain, string> = {
   unknown: "Unclassified",
 };
 
+/**
+ * Human-facing router labels. Mirrors STATUS_LABEL in the backend so the
+ * claims table reads as prose ("Singapore recall") rather than as an enum
+ * key ("local_recall").
+ */
+const STATUS_LABEL: Record<string, string> = {
+  allegation: "Allegation",
+  investigation: "Investigation",
+  arrest: "Arrest",
+  statement: "Official statement",
+  charge: "Charge",
+  conviction: "Conviction",
+  sentence: "Sentence",
+  release: "Release",
+  bail: "Bail",
+  advisory: "Advisory",
+  warning: "Warning",
+  overseas_recall: "Overseas recall",
+  local_recall: "Singapore recall",
+  ban: "Ban",
+  recall_scope: "Recall scope",
+  proposed: "Proposed",
+  passed: "Passed",
+  effective: "In effect",
+  deadline: "Policy deadline",
+  enforced: "Enforcement",
+  penalty: "Penalty",
+  eligibility: "Eligibility scope",
+  unknown: "Unclassified",
+};
+
 /** Status keys are snake_case on the wire; render them as prose. */
 export function humaniseStatus(status: string): string {
-  return status.replace(/_/g, " ").replace(/^\w/, (c) => c.toUpperCase());
+  return (
+    STATUS_LABEL[status] ??
+    status.replace(/_/g, " ").replace(/^\w/, (c) => c.toUpperCase())
+  );
 }
 
 export function confidenceLabel(confidence: number): string {

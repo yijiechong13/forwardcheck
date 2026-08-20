@@ -52,6 +52,54 @@ _STATUS_PATTERNS: list[tuple[str, StatusType]] = [
      StatusType.LOCAL_RECALL),
     (r"\badvisory\b|\badvis(?:ed|es)\b|\bcaution(?:ed)?\b", StatusType.ADVISORY),
 
+    # --- Substance / composition claims ---
+    #
+    # "Contains cadmium" and "contains toxins" are product-safety assertions
+    # about what is in a product, checkable against the recall notice that
+    # states the actual reason. Placed first because they carry no ladder verb.
+    (r"\bcontains?\b|\bcontained\b|\blaced\s+with\b|\btainted\s+with\b"
+     r"|\bcontaminated\s+with\b|\btoxins?\b|\bcadmium\b|\bheavy\s+metals?\b",
+     StatusType.RECALL_SCOPE),
+
+    # --- Automatic-consequence claims ---
+    # "Anyone caught will automatically go to jail" is a claim about the
+    # *modality* of a penalty, not about a policy taking effect, even though
+    # the sentence usually opens with a commencement date. Checked before the
+    # policy ladder so the date does not capture it.
+    (r"\bautomatic(?:ally)?\s+(?:go\s+to\s+jail|be\s+jailed|jailed|fined|"
+     r"be\s+fined|face|receive)\b|\bwill\s+automatically\b"
+     r"|\banyone\s+caught\b.{0,40}\b(?:jail|fined|prison)\b",
+     StatusType.PENALTY),
+
+    # --- Penalty magnitude ---
+    # "The jail term is 10 years" / "The fine is $5,000" assert a specific
+    # quantum, which is checked against the statutory maximum.
+    (r"^the\s+(?:jail\s+term|fine|penalty|sentence)\s+is\b"
+     r"|\bjail\s+for\s+\d+\s+years?\b|\b\d+\s+years?\s+(?:in\s+)?jail\b",
+     StatusType.PENALTY),
+
+    # --- Benefit form ---
+    # "The vouchers are given as cash" is an eligibility/scheme-scope claim
+    # about what the benefit *is*, not about who receives it.
+    (r"\bgiven\s+as\s+cash\b|\bin\s+cash\b|\bcash\s+(?:payout|handout)\b",
+     StatusType.ELIGIBILITY),
+
+    # --- Scope / eligibility (checked before the ladders) ---
+    #
+    # These sit above the ladder patterns because a scope claim often also
+    # contains ladder vocabulary: "all products have been recalled" is a recall
+    # sentence, but the checkable assertion is the *scope*, not the recall.
+    (r"\b(?:all|every|whole|entire)\s+(?:batches|products|bottles|items|packs|"
+     r"stock|brands?|range|lines?)\b|\ball\s+\w+\s+(?:powder|lotion|formula)\b"
+     r"|\baffected\s+batch\b|\bbatch\s+numbers?\b"
+     r"|\bthrow\s+away\s+all\b|\bdiscard\s+all\b|\bavoid\s+all\b"
+     r"|\bdon'?t\s+buy\s+any\b", StatusType.RECALL_SCOPE),
+    (r"\b(?:eligible|eligibility|qualify|qualifies|entitled)\b"
+     r"|\bevery\s+(?:singaporean|citizen|household|resident)\b"
+     r"|\b(?:prs?|permanent residents?)\s+(?:are|is|will|get|also)\b"
+     r"|\bper\s+(?:household|person|individual)\b"
+     r"|\bhousehold\b|\bindividual-based\b", StatusType.ELIGIBILITY),
+
     # --- Policy ladder ---
     (r"\bfine[ds]?\b|\bfined\s+\$|\bpenalt(?:y|ies)\b|\bcompound(?:ed)?\b"
      r"|\bwill\s+be\s+fined\b|\bmust\s+pay\b", StatusType.PENALTY),

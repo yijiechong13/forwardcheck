@@ -1,10 +1,15 @@
 /**
- * The four seeded demo claims.
+ * The five seeded demo claims.
  *
- * One per status domain, chosen so each exercises a different escalation:
- * policy scope and penalty, legal rung, product-safety jurisdiction and scope,
- * and policy stage. Each is written the way it actually circulates — forwarding
- * cruft, emoji, urgency markers, and a mix of true and escalated statements.
+ * Each is a **synthetic forwarded-style message derived from real Singapore
+ * public information** — not a captured private message. They are written the
+ * way such messages actually circulate: urgency markers, imperatives, and a
+ * mix of true and overstated statements.
+ *
+ * Between them they cover the three ways a forwarded claim overstates:
+ *   STATUS   — a rung it has not reached (investigated -> charged)
+ *   SCOPE    — who or what is covered (one batch -> all products)
+ *   MODALITY — how certain a consequence is (up to $5,000 -> automatic fine)
  */
 export interface ExampleClaim {
   id: string;
@@ -16,30 +21,37 @@ export interface ExampleClaim {
 export const EXAMPLE_CLAIMS: ExampleClaim[] = [
   {
     id: "cat-licensing",
-    label: "HDB cat licensing",
-    blurb: "A real deadline wrapped in a penalty that is not real",
+    label: "Cat licensing",
+    blurb: "A real deadline, an automatic fine that is not real",
     message:
-      "⚠️ URGENT ⚠️ From 1 Sept, HDB cat owners with more than 2 cats will be fined $5,000 and AVS will remove the extra cats. All cats, including community cats, must be licensed by 31 Aug. Please forward to all cat owners 🐱🙏",
+      "From 1 Sept, HDB cat owners with more than 2 cats will automatically be fined $5,000 and AVS will remove the extra cats. All cats, including community cats, must be licensed by 31 Aug.",
   },
   {
-    id: "rocky-case",
-    label: "Charged, or investigated?",
-    blurb: "An investigation reported as a charge already in court",
+    id: "cdc-vouchers",
+    label: "CDC vouchers",
+    blurb: "Right amount, wrong unit — household read as individual",
     message:
-      "Rocky's owner has been charged with animal abuse after the dog died during an enforcement operation. The owner is already facing court action. Forward this.",
+      "Every Singaporean will get $500 CDC vouchers in cash this month, including PRs. Must claim by Sunday or lose it.",
   },
   {
-    id: "product-recall",
-    label: "Product recall",
-    blurb: "An overseas batch recall reported as a Singapore-wide one",
+    id: "vaping-penalties",
+    label: "Vaping penalties",
+    blurb: "A real law change, an invented automatic jail term",
     message:
-      "URGENT: This snack product has been recalled in Singapore and taken off all shelves. The whole product line is affected. Please forward to your family.",
+      "From 1 May 2026, anyone caught with vapes or Kpods will automatically go to jail for 10 years.",
   },
   {
-    id: "policy-stage",
-    label: "Policy in force?",
-    blurb: "A law that passed, reported as already enforced",
+    id: "formula-recall",
+    label: "Milk powder recall",
+    blurb: "A batch recall stretched to two entire brands",
     message:
-      "The new workplace fairness law has passed and fines start immediately. Employers who discriminate will be fined from this month. Forward this.",
+      "All NAN and Dumex milk powder in Singapore has been recalled because it contains toxins. Don't buy any.",
+  },
+  {
+    id: "calamine-recall",
+    label: "Calamine lotion",
+    blurb: "One affected batch reported as every bottle",
+    message:
+      "Guardian calamine lotion contains cadmium. Throw away all bottles immediately.",
   },
 ];

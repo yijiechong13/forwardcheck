@@ -4,13 +4,15 @@
 
 [github.com/yijiechong13/forwardcheck](https://github.com/yijiechong13/forwardcheck)
 
-ForwardCheck SG is an agentic RAG web app that verifies forwarded public-interest claims by
-decomposing them into status claims, retrieving official or credible evidence, and producing
-source-backed verdicts with timelines.
+ForwardCheck SG is an agentic RAG web app that decomposes forwarded public-interest claims,
+retrieves official Singapore source evidence, and produces claim-level verdicts with citations,
+timelines and shareable corrections.
+
+It answers one question: *is this claim supported, misleading, outdated, false, or insufficiently
+evidenced by official Singapore sources?*
 
 It is **not** a chatbot, not an "ask an LLM if this is true" wrapper, and **not a scam or
-phishing detector**. It answers one question: *what is officially or credibly confirmed about
-this claim's status?*
+phishing detector** — detecting malicious intent is a separate problem with separate signals.
 
 Scope is **Singapore only** — one jurisdiction gives a controlled source hierarchy and an
 evaluation set that can be labelled with confidence.
@@ -26,11 +28,13 @@ status one or more rungs up a ladder:
 |---|---|
 | under investigation | **charged** |
 | charged | **convicted** |
-| maximum penalty is $5,000 | **you will be fined $5,000** |
-| recalled overseas, specific batches | **recalled in Singapore, whole product** |
+| up to $5,000 on conviction | **you will automatically be fined $5,000** |
+| one recalled batch | **all bottles, throw them away** |
+| $500 per household | **$500 for every Singaporean** |
+| vouchers | **cash** |
+| recalled overseas | **recalled in Singapore** |
 | policy passed in Parliament | **policy in force, fines start now** |
-| advisory issued | **banned** |
-| allegation | **officially confirmed** |
+| precautionary packaging recall | **contains toxins** |
 
 A generic fact-checker answers "true or false?" about the whole message — which is the wrong
 question, because these messages are usually *partly* true. Telling someone their message is
@@ -39,33 +43,52 @@ question, because these messages are usually *partly* true. Telling someone thei
 ForwardCheck SG decomposes the message into atomic status claims and gives each one its own
 verdict, evidence, and confidence.
 
-### The three status domains
+### Three axes of overstatement
 
-| Domain | Ladder | Example distinction |
+Status escalation was the original model. It turns out to be one axis of three — and a system
+that models only status passes two-thirds of real forwards as accurate.
+
+| Axis | What is overstated | Example |
 |---|---|---|
-| **Legal / news** | investigated → arrested → charged → convicted → sentenced | maximum penalty vs automatic sentence |
-| **Policy / regulatory** | proposed → passed → effective → deadline → enforced | passed vs in force; all cats vs pet cats |
-| **Product / public safety** | advisory → warning → overseas recall → local recall → ban | Singapore recall vs overseas-only; batch vs whole line |
+| **Status** | the stage reached | investigated → charged |
+| **Scope** | who or what is covered | one batch → all products; per household → per person |
+| **Modality** | how certain or automatic | up to $5,000 on conviction → automatically fined |
+
+These are independent. *"Anyone caught automatically gets 10 years"* overstates scope **and**
+modality while getting the status rung exactly right.
+
+### What it verifies
+
+1. **Policy / regulatory status** — proposed, passed, in force, enforced
+2. **Fines, penalties, deadlines, eligibility scope** — maximums vs automatic, who qualifies
+3. **Product and food recalls** — Singapore vs overseas, affected batch vs whole product
+4. **Legal / news status** — investigated, arrested, charged, convicted, sentenced
 
 ### What it actually does
 
 Paste this in:
 
-> ⚠️ URGENT ⚠️ From 1 Sept, HDB cat owners with more than 2 cats will be fined $5,000 and AVS
-> will remove the extra cats. All cats, including community cats, must be licensed by 31 Aug.
-> Please forward to all cat owners 🐱🙏
+> Every Singaporean will get $500 CDC vouchers in cash this month, including PRs.
+> Must claim by Sunday or lose it.
 
 And it returns:
 
 | Claim | Verdict | Why |
 |---|---|---|
-| Cats must be licensed by 31 Aug | **Supported** | The licensing deadline is genuine |
-| Owners with >2 cats will be fined $5,000 | **Misleading** | $5,000 is the *maximum* court penalty, not an automatic fine |
-| AVS will remove the extra cats | **Misleading** | Source states owners will not be required to give up their animals |
-| Community cats must be licensed | **Misleading** | Licensing covers owned pet cats; community cats are out of scope |
+| Every Singaporean will get $500 CDC vouchers | **Misleading** | The $500 is allocated **per household**, not to each individual |
+| The vouchers are given as cash | **Misleading** | They are vouchers redeemed at merchants; they cannot be exchanged for cash |
+| PRs are also eligible | **Insufficient evidence** | Sources say *Singaporean households*, and are silent on PRs |
+| Must claim by Sunday | **Insufficient evidence** | No source states a one-week deadline |
+
+Two claims are wrong in different ways; two the evidence simply does not answer. Reporting those
+last two as False would be its own fabrication — **the system says it does not know.**
 
 Plus a status timeline showing which stages the evidence actually reaches, and a share-ready
 correction for the group chat it came from.
+
+> **About the demo messages.** The seeded examples are **synthetic forwarded-style claims
+> derived from real Singapore public information** — written to resemble how such messages
+> circulate. They are not captured private WhatsApp or Telegram messages.
 
 ## Verdict vocabulary
 
@@ -128,48 +151,52 @@ The eval report scores six metrics against the targets in [EVAL_PLAN.md](EVAL_PL
 non-zero if any target is missed or any **critical error** occurs — a critical error being a false
 endorsement, a lost escalation, or a confident answer where the evidence does not support one.
 
-Current: 56 tests passing, 7 eval cases across all three status domains, all targets met,
-zero critical errors.
+Current: **83 tests passing**, 10 eval cases / 24 gold claims across all three axes and all
+three domains, all targets met, **zero critical errors**.
 
 ---
 
 ## Demo script
 
-A four-minute walkthrough for a live demo. One example per status domain.
+A five-minute walkthrough. Each example breaks along a different axis.
 
-**1. Cat licensing** *(policy scope and penalty)*
-Load the first example, verify. Point out the overall verdict is **Misleading**, not False —
-one claim is genuinely **Supported**. This is the core argument for per-claim verdicts: calling
-the whole message false would be its own inaccuracy, and would get the correction ignored.
-The escalation badge reads `maximum penalty → automatic consequence`.
+**1. Cat licensing** *(modality + scope)*
+Verify. Overall verdict is **Misleading**, not False — one claim is genuinely **Supported**.
+That is the argument for per-claim verdicts: calling the whole message false would be its own
+inaccuracy and would get the correction dismissed. The fine claim carries an escalation badge:
+*up to $5,000 on conviction* → *automatically fined*.
 
-**2. Charged, or investigated?** *(the legal ladder)*
-Load the second example. Nothing here is Supported — the evidence has an investigation and an
-AGC review, and states no one has been charged. Open the **share card**: *"no one has been
-charged — the case is still at the investigation or review stage"* is the distinction the whole
-product exists to make. Scroll to the **timeline**: investigation and statement filled, charge
-and conviction drawn as explicitly missing.
+**2. CDC vouchers** *(scope + abstention)*
+The strongest demo. Four claims, four different outcomes — two Misleading, two **Insufficient
+evidence**. Point out that the amount is *right* and the scheme is *real*; what is wrong is the
+unit of allocation (household, not individual) and the form (vouchers, not cash). And that the
+system refuses to answer on PR eligibility rather than guessing.
 
-**3. Product recall** *(jurisdiction and scope)*
-Load the third example. Two escalations at once — the recall was **overseas**, and it covered
-**specific batches**, not the whole line. The timeline is the clearest artefact here: it shows
-`Overseas recall ✓` and `Local recall ✗`. Something real happened; it just did not happen here.
+**3. Vaping penalties** *(modality)*
+A real law change on a real date, with an invented consequence. "Up to, on conviction, for
+supply offences" becomes "automatic, for anyone caught". The statute is cited alongside the
+enforcement notice showing possession is treated differently from supply.
 
-**4. Policy in force?** *(the policy ladder)*
-Load the fourth example. The law genuinely passed — and stops there. Timeline shows
-`Proposed ✓ · Passed ✓ · In effect ✗ · Enforced ✗`. "Fines start immediately" asserts two rungs
-the evidence never reaches.
+**4. Milk powder recall** *(scope + invented reason)*
+A real recall — three batches of one product, for a packaging defect. The forward stretches it
+to two entire brands and swaps the reason for "toxins". The reason claim comes back **False**:
+the source states explicitly there was no contamination.
 
-**5. Developer trace**
-Expand it on any result. Seven nodes, the evidence IDs each retrieved, and the rule that
-produced the verdict. Point out `retrieve` → `clusterExpansion`: the document that settles the
-Rocky case says "no person has been charged", which shares almost no vocabulary with the claim,
-and pure lexical retrieval never finds it.
+**5. Calamine lotion** *(scope, minimal case)*
+"Contains cadmium" is **Supported** — that genuinely happened, in one batch. "Throw away all
+bottles" is **Misleading**. The same sentence pair, one true and one not, is the cleanest
+illustration of why whole-message verdicts fail.
 
-**6. Out of scope** *(the honesty check)*
-Type something the corpus does not cover — durian prices, a made-up policy. It returns
-**Insufficient evidence**, not a guess. This case is in the eval set precisely because an
-earlier version got it wrong: it returned "Supported", cited to cat-licensing documents.
+**6. Developer trace**
+Expand it on any result. Seven nodes, the evidence IDs each retrieved, and the rule behind each
+verdict. Point out `retrieve` → `messageCluster`: short claims share vocabulary across clusters
+("recall", "batch", "10 years jail"), so the cluster is resolved once from the whole message and
+claims are biased toward it — otherwise you get the right verdict citing the wrong case.
+
+**7. Out of scope** *(the honesty check)*
+Type something the corpus does not cover. It returns **Insufficient evidence**, not a guess.
+This case is in the eval set because an earlier version got it wrong: it returned "Supported",
+cited to cat-licensing documents.
 
 ---
 
@@ -210,7 +237,9 @@ interfaces for Anthropic / pgvector / web search
 ## Evidence honesty
 
 All bundled evidence is **seeded mock data**, hand-written to resemble real advisories and
-labelled `isMock: true` in the API and the UI. URLs are placeholders. ForwardCheck SG never presents
+labelled `isMock: true` in the API and the UI. The demo messages are **synthetic
+forwarded-style claims derived from real Singapore public information**, not captured private
+messages. URLs are placeholders. ForwardCheck SG never presents
 a fabricated citation as a real one, and the test suite asserts it.
 
 ## Screenshots
@@ -218,8 +247,8 @@ a fabricated citation as a real one, and the test suite asserts it.
 To capture screenshots for a portfolio or README:
 
 1. Start both servers, open http://localhost:3000.
-2. Load the **HDB cat licensing** example and verify — it shows the widest range of verdicts on
-   one screen (Supported + Misleading + escalation badges).
+2. Load the **CDC vouchers** example and verify — it shows the widest range of verdicts on one
+   screen (Misleading + Insufficient evidence, with scope escalation badges).
 3. Capture the overall verdict card and claims table together.
 4. Scroll to the **timeline** and capture it separately — the "NOT FOUND IN AVAILABLE EVIDENCE"
    markers are the most distinctive thing in the UI.
@@ -247,9 +276,11 @@ Save to `docs/screenshots/` and reference them here.
 
 - Evidence is seeded, so retrieval quality is measured against a corpus built for these cases.
   The eval numbers are **regression guards, not a generalisation estimate**.
-- Rule-based grading recognises the escalation patterns it was taught; novel phrasing falls
-  through to `does_not_answer`. That direction is deliberate — falling through to abstention is
-  safe, falling through to support is not.
+- Rule-based grading recognises the escalation, scope and modality patterns it was taught; novel
+  phrasing falls through to `does_not_answer`. That direction is deliberate — falling through to
+  abstention is safe, falling through to support is not.
+- Cross-cluster retrieval is handled by biasing toward the message's dominant cluster. This works
+  because clusters are seeded and well-separated; a production corpus would need reranking.
 - English only. Singapore Chinese/Malay/Tamil forwards are out of MVP scope.
 - Singapore only. The status ladders generalise, but the corpus and source hierarchy do not.
 - Cluster-aware retrieval expansion works because the corpus is seeded and clustered. It would

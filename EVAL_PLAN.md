@@ -8,13 +8,26 @@ means before the implementation exists.
 `backend/app/tests/eval_dataset.json` — each case has the raw forwarded message plus expected
 extracted claims, status routing, verdicts, and whether citations are required.
 
-Cases: the four demo claims (cat licensing, Rocky-style legal status, product recall, policy
-stage), the NS legal-status claim, plus adversarial ones — an out-of-scope claim that must
-abstain, and an already-correct message that must come back `Supported` rather than being
-flagged.
+Ten cases, 24 gold claims. Demo messages are **synthetic forwarded-style claims derived from
+real Singapore public information**, not captured private messages.
 
-Coverage is deliberately one case per status domain, so a regression in any single ladder
-(legal, policy, product safety) fails the build rather than being averaged away.
+| Case | Axis it stresses |
+|---|---|
+| `cat-licensing` | modality (maximum vs automatic) + scope (pet vs community cats) |
+| `cdc-vouchers` | scope (household vs individual), form (vouchers vs cash), abstention (PRs, deadline) |
+| `vaping-penalties` | modality (statutory maximum vs automatic jail) |
+| `formula-recall` | scope (batch vs all brands) + invented reason |
+| `calamine-recall` | scope (one batch vs all bottles) |
+| `product-recall` | jurisdiction (overseas vs Singapore) |
+| `policy-stage` | status (passed vs in force vs enforced) |
+| `ns-enlistment` | status (arrest vs charge vs conviction vs sentence) |
+| `rocky-case` | status (investigation vs charge) |
+| `out-of-scope-abstain` | abstention on an uncovered topic |
+| `accurate-forward` | a true message that must **not** be flagged |
+
+Coverage spans all three axes and all three domains, so a regression in any one fails the build
+rather than being averaged away. Two cases exist purely to catch over-confidence in each
+direction: abstaining when the corpus is silent, and *not* flagging an accurate message.
 
 ## Metrics
 
@@ -28,6 +41,10 @@ Routing errors are upstream errors — they poison retrieval, so they are tracke
 
 ### 3. Verdict accuracy
 Per-claim verdict against the gold label. **Target: ≥ 0.75 exact match.**
+
+Note that some gold labels are deliberately `Insufficient evidence` (PR eligibility, the invented
+Sunday deadline). Those are not "unknowns the system failed to resolve" — they are the correct
+answer, and predicting a confident verdict there is a **critical error**.
 
 Not all errors cost the same:
 
