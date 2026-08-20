@@ -28,3 +28,16 @@ out/
 # Build output
 dist/
 build/
+
+# Project docs and config template — kept locally, not published.
+# README.md is deliberately still tracked so the repo explains itself.
+ARCHITECTURE.md
+DATA_SOURCES.md
+EVAL_PLAN.md
+LEARNING_LOG.md
+PROJECT_SPEC.md
+frontend/AGENTS.md
+frontend/CLAUDE.md
+frontend/README.md
+.env.example
+**/.env.example

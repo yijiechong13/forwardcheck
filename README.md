@@ -147,7 +147,7 @@ cd backend
 cd backend && .venv/bin/python scripts/run_eval.py --verbose
 ```
 
-The eval report scores six metrics against the targets in [EVAL_PLAN.md](EVAL_PLAN.md) and exits
+The eval report scores six metrics against defined targets and exits
 non-zero if any target is missed or any **critical error** occurs — a critical error being a false
 endorsement, a lost escalation, or a confident answer where the evidence does not support one.
 
@@ -210,22 +210,27 @@ Next.js UI  ──POST /verify──>  FastAPI
                     adapters: LLM · Retrieval · Search   (all mock by default)
 ```
 
-Seven nodes, each `(state) -> state`, each appending a trace step. See
-[ARCHITECTURE.md](ARCHITECTURE.md) for why a graph rather than a single prompt, and what the LLM
-is and is not allowed to decide.
+Seven nodes, each `(state) -> state`, each appending a trace step.
 
-### Documentation
+A graph rather than a single prompt, because a forwarded message is usually *partly* true: one
+opaque answer destroys that, while a graph of small typed nodes gives per-claim granularity, an
+auditable middle, and swappable adapters. Verdicts are produced by `verdict.py` deterministically
+— the LLM adapter is scoped to classification over a closed label set and to prose, never to
+deciding a verdict.
 
-| Document | What it covers |
+### Reading the code
+
+| Path | What lives there |
 |---|---|
-| [PROJECT_SPEC.md](PROJECT_SPEC.md) | Scope, verdict vocabulary, output contract |
-| [ARCHITECTURE.md](ARCHITECTURE.md) | Pipeline graph, adapters, design decisions |
-| [EVAL_PLAN.md](EVAL_PLAN.md) | Metrics, targets, critical-error definitions |
-| [DATA_SOURCES.md](DATA_SOURCES.md) | Authority tiers, SG/MY agencies, seeded evidence |
-| [LEARNING_LOG.md](LEARNING_LOG.md) | Per-phase build log, RAG concepts, bugs found |
+| `backend/app/models/status.py` | Status ladders and the three overstatement axes |
+| `backend/app/pipeline/` | The seven nodes, one file each |
+| `backend/app/data/mock_sources.py` | The 38-document seeded corpus, with cluster rationale |
+| `backend/app/services/` | LLM / retrieval / search adapter interfaces |
+| `backend/app/tests/` | 83 tests, incl. scope-and-modality behaviour |
+| `frontend/src/components/` | One component per result section |
 
-The learning log is the most useful file for understanding *why* the system looks like this —
-it records the three retrieval bugs found during development and what each one teaches.
+Design decisions are documented as comments at the point they apply, rather than in a separate
+document that drifts from the code.
 
 ## Tech stack
 
