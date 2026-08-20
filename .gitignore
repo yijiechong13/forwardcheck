@@ -44,3 +44,9 @@ frontend/README.md
 
 # Local TTL cache for live-mode search/page results (never contains secrets)
 backend/.cache/
+
+# Never commit .env backups — they contain real keys
+.env.backup-*
+**/.env.backup-*
+.env.bak
+**/.env.bak

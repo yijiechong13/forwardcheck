@@ -89,3 +89,40 @@ def test_env_example_contains_only_placeholders():
     assert "sk-ant-" not in text
     assert "tvly-" not in text
     assert "your_anthropic_api_key" in text
+
+
+# ---------------------------------------------------------------------------
+# Cost safety: the test suite must never be able to spend money
+# ---------------------------------------------------------------------------
+
+def test_test_suite_runs_in_mock_mode_regardless_of_env():
+    """conftest forces mock, so a live .env cannot make pytest spend money."""
+    from app.config import settings
+
+    assert settings.mode == "mock"
+
+
+def test_real_provider_keys_are_cleared_at_collection():
+    """conftest strips real keys at import, so no live client can be built.
+
+    Asserted against the flag conftest records at collection time rather than
+    the live environment, because individual tests legitimately inject
+    clearly-fake keys via monkeypatch.
+    """
+    from app.tests.conftest import KEYS_CLEARED
+
+    assert KEYS_CLEARED, "real provider keys were visible to the test suite"
+
+
+def test_live_smoke_script_requires_explicit_flag():
+    """The only paid path must refuse to run without --yes-spend-money."""
+    import subprocess
+    import sys
+    from pathlib import Path
+
+    script = Path(__file__).resolve().parents[2] / "scripts" / "live_smoke.py"
+    result = subprocess.run(
+        [sys.executable, str(script)], capture_output=True, text=True, timeout=60
+    )
+    assert result.returncode != 0
+    assert "yes-spend-money" in result.stdout

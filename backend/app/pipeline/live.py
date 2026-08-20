@@ -92,15 +92,35 @@ def _validated_claims(
     """Drop hallucinated extractions; cap to budget."""
     kept: list[ExtractedClaim] = []
     dropped: list[str] = []
-    lowered = message.lower()
+    haystack = " ".join(message.lower().split())
+    haystack_tokens = set(haystack.replace(",", " ").replace(".", " ").split())
+
     for claim in result.claims:
-        # The span must actually exist in the message (case-insensitive,
-        # whitespace-normalised) or the claim is treated as invented.
         span = " ".join(claim.source_span.lower().split())
-        if span and span in " ".join(lowered.split()):
-            kept.append(claim)
-        else:
+        if not span:
             dropped.append(claim.claim_text)
+            continue
+
+        # Primary check: the span is literally present.
+        if span in haystack:
+            kept.append(claim)
+            continue
+
+        # Secondary check: the model lightly reworded the span (trimmed a
+        # word, normalised punctuation) but every content word still comes
+        # from the message. Requiring near-total token containment keeps this
+        # from admitting invented claims, while a strict substring test alone
+        # discarded valid extractions and forced an unnecessary fallback.
+        span_tokens = [
+            t for t in span.replace(",", " ").replace(".", " ").split() if len(t) > 2
+        ]
+        if span_tokens and sum(t in haystack_tokens for t in span_tokens) / len(
+            span_tokens
+        ) >= 0.85:
+            kept.append(claim)
+            continue
+
+        dropped.append(claim.claim_text)
     if dropped:
         trace.add(
             "decompose.validate",

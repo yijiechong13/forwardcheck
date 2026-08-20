@@ -6,7 +6,7 @@ Paste a forwarded message. Get a verdict for every claim in it, with cited evide
 ![Backend](https://img.shields.io/badge/backend-FastAPI-informational)
 ![Frontend](https://img.shields.io/badge/frontend-Next.js%2016-informational)
 ![Python](https://img.shields.io/badge/python-3.13-blue)
-![Tests](https://img.shields.io/badge/tests-125%20passing-brightgreen)
+![Tests](https://img.shields.io/badge/tests-128%20passing-brightgreen)
 ![License](https://img.shields.io/badge/license-MIT-lightgrey)
 
 ## Overview
@@ -330,7 +330,7 @@ dependency.
 | Retrieval | BM25 (in-repo) for the seeded corpus; lexical + heuristic ranking for live passages. No embeddings. |
 | Caching | File-based TTL cache (`backend/.cache/`), swappable behind one class |
 | Storage | No database |
-| Testing | pytest — 125 tests, all offline and free |
+| Testing | pytest — 128 tests, all offline and free |
 | Deployment | Not deployed |
 
 ## Project structure
@@ -361,7 +361,7 @@ backend/
       retrieval_adapter.py BM25 over the seeded corpus
     data/mock_sources.py   38 seeded sample documents, 9 topic clusters
     eval/harness.py        Regression scoring for the deterministic pipeline
-    tests/                 125 tests (see Testing)
+    tests/                 128 tests (see Testing)
   scripts/
     run_eval.py            Mock-mode regression report
     live_smoke.py          Opt-in paid smoke test (never run by pytest)
@@ -434,9 +434,10 @@ budget knobs and `backend/.env.example` for the complete list with defaults.
 cd backend && .venv/bin/python -m pytest app/tests -v
 ```
 
-**All 125 tests run in mock mode with mocked providers and cost nothing.** Live
-providers are never called from the test suite; one test asserts that mock-mode
-verification opens no sockets at all.
+**All 128 tests run in mock mode with mocked providers and cost nothing**, even
+when `backend/.env` is configured for live mode — `app/tests/conftest.py` forces
+mock and strips provider keys at collection time, so running pytest can never
+spend money. One test asserts mock-mode verification opens no sockets at all.
 
 ```bash
 cd backend && .venv/bin/python scripts/run_eval.py --verbose
