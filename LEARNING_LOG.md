@@ -1,4 +1,4 @@
-# ForwardCheck — Learning Log
+# ForwardCheck SG — Learning Log
 
 A running record of what was built, what it teaches, and what to study next.
 
@@ -296,3 +296,71 @@ verified nothing.
   codebase for `complete()`, and notably it is prose, not a verdict.
 - *Stating limitations prominently in the README.* A 100% eval score on six cases invites
   overreading, so the README says plainly what the numbers do and do not mean.
+
+---
+
+## Scope change — ForwardCheck SG (Singapore-only, sharper positioning)
+
+**What changed**
+Two clarifications applied together: positioning narrowed to *public-status verification*
+explicitly excluding scam/phishing detection, and jurisdiction narrowed to Singapore only.
+
+Demo set restructured to **one example per status domain**, which is what the positioning
+actually implies:
+
+| Demo | Domain | Escalation it tests |
+|---|---|---|
+| HDB cat licensing | policy | maximum penalty → automatic fine; pet cats → all cats |
+| Charged, or investigated? | legal | investigation → charge |
+| Product recall | product safety | overseas → local; affected batch → whole line |
+| Policy in force? | policy | passed → effective → enforced |
+
+**Files changed**
+`PROJECT_SPEC.md`, `DATA_SOURCES.md`, `ARCHITECTURE.md`, `EVAL_PLAN.md`, `README.md`,
+`backend/app/models/status.py`, `backend/app/data/mock_sources.py`,
+`backend/app/pipeline/{route,freshness}.py`, `backend/app/services/search_adapter.py`,
+`backend/app/tests/{eval_dataset.json,test_adapters.py}`, `frontend/src/lib/{types,examples}.ts`,
+`frontend/src/app/{page,layout}.tsx`, `frontend/src/components/InputPanel.tsx`.
+
+**What RAG concept this phase teaches**
+
+*Narrowing scope improves a RAG system measurably, not just aesthetically.* Dropping a
+jurisdiction removed 8 domains from the allowlist and replaced a Malaysia cluster with two
+Singapore ones. The corpus grew (19 → 23 documents) while the *ambiguity* shrank: there is now
+one source hierarchy, so tier weighting means one thing, and every gold label can be checked
+against a single set of authorities. Decomposition F1 rose from 0.897 to 0.941 — not because the
+code got smarter, but because the eval set stopped straddling two regimes.
+
+*One jurisdiction, but "Overseas" must survive.* The temptation was to delete every non-SG
+jurisdiction. That would have broken a core check: refuting "recalled in Singapore" **requires**
+evidence that the recall happened elsewhere. `Overseas` is a foil, not a second market, and the
+enum comment says so — otherwise a future cleanup deletes it again.
+
+*A timeline bug the new domains exposed.* The product-recall timeline initially showed no recall
+at any stage. The claim "recalled in Singapore" retrieves the local advisories that refute it,
+but never the overseas recall — the thing that actually happened. Drawing a timeline with
+nothing found misrepresents the event as badly as the forward does, just in the other direction.
+Fixed by letting the timeline include same-cluster documents no individual claim retrieved.
+
+The general lesson: **per-claim retrieval and event-level narrative need different evidence
+sets.** Grading asks "what speaks to this claim"; the timeline asks "what happened". Those are
+not the same query, and using one answer for both loses information.
+
+**What to study next**
+- Whether the status ladders transfer across jurisdictions unchanged. The pipeline is
+  jurisdiction-agnostic; only the corpus and allowlist are SG-specific, which suggests adding a
+  second jurisdiction is a data problem rather than an architecture problem. Worth testing
+  rather than assuming.
+- Multilingual decomposition — Singapore forwards circulate in Chinese, Malay, and Tamil, and
+  the regex-based decomposer is English-only by construction.
+
+**Trade-offs made**
+- *Kept Rocky as a Singapore case.* The brief suggested de-emphasising it as a Malaysia example,
+  but its evidence cluster was already AVS/AGC — a Singapore case throughout. It is the cleanest
+  demonstration of investigation-vs-charge in the corpus, so it stayed and was relabelled
+  "Charged, or investigated?" to lead with the distinction rather than the animal.
+- *Four examples instead of three.* Adds a row to the UI grid, but one demo per status domain
+  means a reviewer sees all three ladders without typing anything.
+- *`scamshield.gov.sg` retained in the allowlist.* It is a legitimate official SG source for
+  checking whether an advisory exists. Annotated in-code as source authenticity, not scam
+  detection, so the distinction survives the next reader.

@@ -1,6 +1,6 @@
 {
   "version": "1.0",
-  "note": "Gold labels for the seeded evidence corpus. These are regression guards, not a generalisation estimate — the corpus was built for these cases. See EVAL_PLAN.md.",
+  "note": "Gold labels for the seeded Singapore evidence corpus. These are regression guards, not a generalisation estimate — the corpus was built for these cases. See EVAL_PLAN.md.",
   "cases": [
     {
       "id": "cat-licensing",
@@ -149,20 +149,54 @@
       ]
     },
     {
-      "id": "overseas-recall-escalation",
-      "description": "Product-safety escalation: an overseas recall reported as a local ban.",
-      "message": "URGENT: This snack has been BANNED in Malaysia and recalled from all shops after being recalled overseas. Do not buy it. Forward to your family group.",
+      "id": "recall-scope-escalation",
+      "description": "Product-safety escalation: an overseas batch recall reported as a Singapore-wide recall of the whole product line.",
+      "message": "URGENT: This snack product has been recalled in Singapore and taken off all shelves. The whole product line is affected. Please forward to your family.",
       "expectedOverallVerdict": "Misleading",
-      "expectedJurisdiction": "Malaysia",
+      "expectedJurisdiction": "Singapore",
       "expectedDomain": "product_safety",
       "expectedClaims": [
         {
-          "gist": "snack has been banned in Malaysia",
-          "statusType": "ban",
+          "gist": "product has been recalled in Singapore",
+          "statusType": "local_recall",
           "verdict": "Misleading",
           "isEscalation": true,
           "requiresCitation": true,
-          "note": "Advisory only; the product remains available for sale."
+          "note": "The recall was overseas and batch-limited. SFA issued an advisory, not a recall."
+        },
+        {
+          "gist": "the whole product line is affected",
+          "statusType": "local_recall",
+          "verdict": "Misleading",
+          "isEscalation": true,
+          "requiresCitation": true,
+          "note": "Only the batches listed by the overseas regulator are affected."
+        }
+      ]
+    },
+    {
+      "id": "policy-stage-escalation",
+      "description": "Policy escalation: a law that has passed reported as already in force with immediate fines.",
+      "message": "The new workplace fairness law has passed and fines start immediately. Employers who discriminate will be fined from this month. Forward this.",
+      "expectedOverallVerdict": "Misleading",
+      "expectedJurisdiction": "Singapore",
+      "expectedDomain": "policy",
+      "expectedClaims": [
+        {
+          "gist": "fines start immediately",
+          "statusType": "penalty",
+          "verdict": "Misleading",
+          "isEscalation": true,
+          "requiresCitation": true,
+          "note": "Passed but not commenced. No penalties before the commencement date."
+        },
+        {
+          "gist": "employers who discriminate will be fined from this month",
+          "statusType": "penalty",
+          "verdict": "Misleading",
+          "isEscalation": true,
+          "requiresCitation": true,
+          "note": "A transition period applies; enforcement does not begin on passage."
         }
       ]
     }

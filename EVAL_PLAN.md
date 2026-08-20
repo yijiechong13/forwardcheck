@@ -1,4 +1,4 @@
-# ForwardCheck — Evaluation Plan
+# ForwardCheck SG — Evaluation Plan
 
 A verification system that is never measured is just a demo. This plan defines what "working"
 means before the implementation exists.
@@ -8,8 +8,13 @@ means before the implementation exists.
 `backend/app/tests/eval_dataset.json` — each case has the raw forwarded message plus expected
 extracted claims, status routing, verdicts, and whether citations are required.
 
-Cases: the three demo claims, plus adversarial ones (an out-of-scope claim that should abstain,
-an already-correct message that should come back `Supported`, and an outdated-policy message).
+Cases: the four demo claims (cat licensing, Rocky-style legal status, product recall, policy
+stage), the NS legal-status claim, plus adversarial ones — an out-of-scope claim that must
+abstain, and an already-correct message that must come back `Supported` rather than being
+flagged.
+
+Coverage is deliberately one case per status domain, so a regression in any single ladder
+(legal, policy, product safety) fails the build rather than being averaged away.
 
 ## Metrics
 

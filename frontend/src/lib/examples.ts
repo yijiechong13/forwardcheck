@@ -1,9 +1,10 @@
 /**
- * The three seeded demo claims.
+ * The four seeded demo claims.
  *
- * These are the messages the pipeline is tuned and evaluated against.
- * Each is written the way it actually circulates: forwarding cruft, emoji,
- * urgency markers, and a mix of true and escalated statements.
+ * One per status domain, chosen so each exercises a different escalation:
+ * policy scope and penalty, legal rung, product-safety jurisdiction and scope,
+ * and policy stage. Each is written the way it actually circulates — forwarding
+ * cruft, emoji, urgency markers, and a mix of true and escalated statements.
  */
 export interface ExampleClaim {
   id: string;
@@ -21,17 +22,24 @@ export const EXAMPLE_CLAIMS: ExampleClaim[] = [
       "⚠️ URGENT ⚠️ From 1 Sept, HDB cat owners with more than 2 cats will be fined $5,000 and AVS will remove the extra cats. All cats, including community cats, must be licensed by 31 Aug. Please forward to all cat owners 🐱🙏",
   },
   {
-    id: "ns-enlistment",
-    label: "NS legal status",
-    blurb: "Charged, but the forward says convicted and sentenced",
-    message:
-      "BREAKING: Amos Yee has been sentenced to 3 years jail in Singapore after being deported from the US. He was arrested at Changi Airport and convicted under the Enlistment Act for NS offences. This means all NS defaulters who return from overseas will automatically be jailed. Forward this.",
-  },
-  {
     id: "rocky-case",
-    label: "Developing news",
+    label: "Charged, or investigated?",
     blurb: "An investigation reported as a charge already in court",
     message:
       "Rocky's owner has been charged with animal abuse after the dog died during an enforcement operation. The owner is already facing court action. Forward this.",
+  },
+  {
+    id: "product-recall",
+    label: "Product recall",
+    blurb: "An overseas batch recall reported as a Singapore-wide one",
+    message:
+      "URGENT: This snack product has been recalled in Singapore and taken off all shelves. The whole product line is affected. Please forward to your family.",
+  },
+  {
+    id: "policy-stage",
+    label: "Policy in force?",
+    blurb: "A law that passed, reported as already enforced",
+    message:
+      "The new workplace fairness law has passed and fines start immediately. Employers who discriminate will be fined from this month. Forward this.",
   },
 ];

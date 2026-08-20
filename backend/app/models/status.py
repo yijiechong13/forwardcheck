@@ -49,8 +49,15 @@ class StatusType(str, Enum):
 
 
 class Jurisdiction(str, Enum):
+    """Where a claim or document applies.
+
+    MVP is Singapore-only. OVERSEAS is retained and load-bearing: the
+    overseas-recall vs local-recall distinction is one of the escalations this
+    product exists to catch, so evidence about other markets must be
+    representable in order to refute a claim of a Singapore recall.
+    """
+
     SINGAPORE = "Singapore"
-    MALAYSIA = "Malaysia"
     OVERSEAS = "Overseas"
     UNKNOWN = "Unknown"
 

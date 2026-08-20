@@ -5,11 +5,20 @@ resemble real advisories so the pipeline has something realistic to reason over,
 but nothing was scraped and every URL is a labelled placeholder. `is_mock=True`
 is set on all of them and surfaced in the UI.
 
-Design note — the *absences* are the point. Two of the three clusters
-deliberately stop one rung short of what the forwarded message claims:
+Scope: Singapore only. The single Overseas document is deliberate and
+load-bearing — the overseas-recall vs local-recall distinction is one of the
+escalations this product exists to catch, and refuting "recalled in Singapore"
+requires evidence that the recall happened somewhere else.
+
+Design note — the *absences* are the point. Most clusters deliberately stop one
+rung short of what the forwarded message claims:
 
   * ns-enlistment: arrest and charge exist; conviction and sentence do not.
   * rocky-case:    investigation and a statement exist; no charge does.
+  * product-recall: an overseas batch recall and local advisories exist;
+                    no Singapore recall and no ban do.
+  * policy-stage:  consultation and passage exist; commencement and
+                    enforcement do not.
 
 A retrieval corpus that can answer everything cannot demonstrate abstention,
 and abstention is the behaviour this product is built around.
@@ -342,83 +351,166 @@ ROCKY_CASE: list[Evidence] = [
 
 
 # ---------------------------------------------------------------------------
-# Cluster 4 — Product safety recall (product_safety / Malaysia + overseas)
+# Cluster 4 — Product safety recall (product_safety / Singapore + overseas)
 #
-# Built to exercise the overseas_recall -> local_recall escalation: a recall
-# genuinely happened, but in another market.
+# Built to exercise two escalations at once:
+#   overseas_recall -> local_recall  (a recall happened, but in another market)
+#   affected batch  -> whole product (a real recall, over-scoped)
+# The Singapore agencies issue an advisory, not a recall or a ban.
 # ---------------------------------------------------------------------------
 
 PRODUCT_RECALL: list[Evidence] = [
     _doc(
-        id="my-kpdn-301",
-        title="Statement on imported snack product following overseas recall",
-        publisher="Ministry of Domestic Trade and Cost of Living (KPDN)",
+        id="sg-sfa-301",
+        title="Advisory on imported snack product following overseas recall",
+        publisher="Singapore Food Agency (SFA)",
         tier=SourceTier.OFFICIAL,
-        jurisdiction=Jurisdiction.MALAYSIA,
+        jurisdiction=Jurisdiction.SINGAPORE,
         published_at="2026-07-15",
         snippet=(
-            "The ministry is aware of a recall of a snack product issued by "
-            "authorities in another country. The affected batches were not "
-            "distributed in Malaysia. No recall has been issued locally. "
-            "Consumers are advised to check batch numbers on imported products."
+            "SFA is aware of a recall of a snack product issued by authorities "
+            "in another country. The affected batches were not imported into "
+            "Singapore. No recall has been issued locally and the product has "
+            "not been banned. Consumers are advised to check batch numbers on "
+            "imported products."
         ),
         status_asserted=StatusType.ADVISORY,
         topic="product-recall",
-        url_slug="kpdn/imported-snack-statement",
+        url_slug="sfa/imported-snack-advisory",
     ),
     _doc(
-        id="my-moh-302",
-        title="Consumer advisory: imported food products and batch checking",
-        publisher="Ministry of Health Malaysia",
+        id="sg-hsa-302",
+        title="Consumer advisory: checking batch codes on imported products",
+        publisher="Health Sciences Authority (HSA)",
         tier=SourceTier.OFFICIAL,
-        jurisdiction=Jurisdiction.MALAYSIA,
+        jurisdiction=Jurisdiction.SINGAPORE,
         published_at="2026-07-16",
         snippet=(
             "An advisory has been issued reminding consumers to check batch "
             "codes on imported products. An advisory is not a ban. The product "
-            "remains available for sale and has not been prohibited."
+            "remains available for sale in Singapore and has not been "
+            "prohibited or withdrawn."
         ),
         status_asserted=StatusType.ADVISORY,
         topic="product-recall",
-        url_slug="moh-my/consumer-advisory-imports",
+        url_slug="hsa/consumer-advisory-imports",
     ),
     _doc(
-        id="ov-fda-303",
+        id="ov-reg-303",
         title="Overseas regulator announces voluntary recall of specific batches",
         publisher="Overseas food safety regulator",
         tier=SourceTier.OFFICIAL,
         jurisdiction=Jurisdiction.OVERSEAS,
         published_at="2026-07-12",
         snippet=(
-            "A voluntary recall was announced covering specific production "
-            "batches distributed within that market. The recall is limited to "
-            "the domestic market of the issuing regulator and does not extend to "
-            "products sold in Southeast Asia."
+            "A voluntary recall was announced covering three production batches "
+            "distributed within that market. The recall is limited to the "
+            "domestic market of the issuing regulator and to the batch codes "
+            "listed. It does not extend to products sold in Singapore, and "
+            "other batches of the same product are unaffected."
         ),
         status_asserted=StatusType.OVERSEAS_RECALL,
         topic="product-recall",
         url_slug="overseas/voluntary-recall-batches",
     ),
     _doc(
-        id="my-news-304",
+        id="sg-news-304",
         title="Authorities: no local recall for snack product",
-        publisher="The Star",
+        publisher="Channel NewsAsia",
         tier=SourceTier.CREDIBLE_NEWS,
-        jurisdiction=Jurisdiction.MALAYSIA,
+        jurisdiction=Jurisdiction.SINGAPORE,
         published_at="2026-07-17",
         snippet=(
             "Authorities clarified that the product has not been recalled in "
-            "Malaysia and that the overseas recall covered batches not sold "
+            "Singapore and that the overseas recall covered batches not sold "
             "here. Messages circulating on social media claiming a nationwide "
-            "ban are inaccurate."
+            "ban are inaccurate. Only the batches listed by the overseas "
+            "regulator are affected, not the whole product line."
         ),
         status_asserted=StatusType.ADVISORY,
         topic="product-recall",
-        url_slug="news-my/no-local-recall",
+        url_slug="news/no-local-recall",
     ),
 ]
 
 
+# ---------------------------------------------------------------------------
+# Cluster 5 — Workplace fairness legislation (policy / Singapore)
+#
+# The policy ladder stops at PASSED. The law has been passed but is not yet in
+# force, so a forwarded claim that "fines start immediately" is asserting two
+# rungs it has not reached (effective, enforced).
+# ---------------------------------------------------------------------------
+
+POLICY_STAGE: list[Evidence] = [
+    _doc(
+        id="sg-mom-401",
+        title="Workplace fairness legislation passed in Parliament",
+        publisher="Ministry of Manpower",
+        tier=SourceTier.OFFICIAL,
+        jurisdiction=Jurisdiction.SINGAPORE,
+        published_at="2026-04-08",
+        snippet=(
+            "The Bill was passed in Parliament. The legislation will take "
+            "effect at a later date to be announced, giving employers time to "
+            "review their practices. Passing the Bill does not bring it into "
+            "force, and the provisions are not yet operative."
+        ),
+        status_asserted=StatusType.PASSED,
+        topic="policy-stage",
+        url_slug="mom/workplace-fairness-passed",
+    ),
+    _doc(
+        id="sg-mom-402",
+        title="Implementation timeline and transition support for employers",
+        publisher="Ministry of Manpower",
+        tier=SourceTier.OFFICIAL,
+        jurisdiction=Jurisdiction.SINGAPORE,
+        published_at="2026-04-10",
+        snippet=(
+            "Employers will be given a transition period before the "
+            "requirements apply. During this period the focus is on education "
+            "and advisory support rather than enforcement. No penalties will "
+            "be imposed before the commencement date, and enforcement action "
+            "will not begin immediately upon passage."
+        ),
+        status_asserted=StatusType.PASSED,
+        topic="policy-stage",
+        url_slug="mom/implementation-timeline",
+    ),
+    _doc(
+        id="sg-mom-403",
+        title="Public consultation on workplace fairness proposals",
+        publisher="Ministry of Manpower",
+        tier=SourceTier.OFFICIAL,
+        jurisdiction=Jurisdiction.SINGAPORE,
+        published_at="2025-08-14",
+        snippet=(
+            "A public consultation was held on proposals to strengthen "
+            "protections against workplace discrimination. Recommendations "
+            "were accepted in principle ahead of legislation being drafted."
+        ),
+        status_asserted=StatusType.PROPOSED,
+        topic="policy-stage",
+        url_slug="mom/workplace-fairness-consultation",
+    ),
+    _doc(
+        id="sg-news-404",
+        title="What the new workplace fairness law means, and when it starts",
+        publisher="The Straits Times",
+        tier=SourceTier.CREDIBLE_NEWS,
+        jurisdiction=Jurisdiction.SINGAPORE,
+        published_at="2026-04-09",
+        snippet=(
+            "The law has been passed but is not yet in force. A commencement "
+            "date has not been announced. Employers are not subject to "
+            "penalties under the new provisions until the law commences."
+        ),
+        status_asserted=StatusType.PASSED,
+        topic="policy-stage",
+        url_slug="news/workplace-fairness-explainer",
+    ),
+]
 # ---------------------------------------------------------------------------
 # The store
 # ---------------------------------------------------------------------------
@@ -428,6 +520,7 @@ ALL_EVIDENCE: list[Evidence] = [
     *NS_ENLISTMENT,
     *ROCKY_CASE,
     *PRODUCT_RECALL,
+    *POLICY_STAGE,
 ]
 
 EVIDENCE_BY_ID: dict[str, Evidence] = {doc.id: doc for doc in ALL_EVIDENCE}

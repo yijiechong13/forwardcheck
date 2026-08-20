@@ -52,7 +52,7 @@ export function InputPanel({
           <div className="mb-2 font-mono text-[10px] tracking-[0.18em] text-fg-subtle">
             OR TRY A SEEDED EXAMPLE
           </div>
-          <div className="grid gap-2 sm:grid-cols-3">
+          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
             {EXAMPLE_CLAIMS.map((example) => (
               <button
                 key={example.id}

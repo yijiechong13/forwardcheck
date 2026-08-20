@@ -7,7 +7,7 @@ wires one in.
 
 Those constraints are the interesting part of this file:
 
-**Domain allowlist, not a general web search.** ForwardCheck ranks sources by
+**Domain allowlist, not a general web search.** ForwardCheck SG ranks sources by
 authority. A general search API returns content farms and SEO pages that would
 enter the corpus with no defensible tier, and the whole verdict model rests on
 tier weighting. `SOURCE_ALLOWLIST` maps domains to tiers, so anything retrieved
@@ -41,8 +41,8 @@ from dataclasses import dataclass
 from app.config import settings
 from app.models.schemas import SourceTier
 
-#: Domain -> authority tier. Only these may enter the evidence pool from live
-#: search. Everything else is dropped rather than added as "secondary", because
+#: Domain -> authority tier. Singapore only for the MVP. Only these may enter
+#: the evidence pool from live search. Everything else is dropped rather than added as "secondary", because
 #: an unknown source with a guessed tier corrupts the ranking that every verdict
 #: depends on. See DATA_SOURCES.md.
 SOURCE_ALLOWLIST: dict[str, SourceTier] = {
@@ -63,25 +63,19 @@ SOURCE_ALLOWLIST: dict[str, SourceTier] = {
     "nparks.gov.sg": SourceTier.OFFICIAL,
     "avs.nparks.gov.sg": SourceTier.OFFICIAL,
     "csa.gov.sg": SourceTier.OFFICIAL,
+    # Listed as an official SG source for verifying whether an advisory exists.
+    # This is source authenticity, not scam detection — see PROJECT_SPEC.md.
     "scamshield.gov.sg": SourceTier.OFFICIAL,
     "mindef.gov.sg": SourceTier.OFFICIAL,
     "mnd.gov.sg": SourceTier.OFFICIAL,
-    # --- Malaysia: official ---
-    "pdrm.gov.my": SourceTier.OFFICIAL,
-    "judiciary.gov.my": SourceTier.PRIMARY,
-    "kpdn.gov.my": SourceTier.OFFICIAL,
-    "moh.gov.my": SourceTier.OFFICIAL,
-    "myhealth.gov.my": SourceTier.OFFICIAL,
-    "malaysia.gov.my": SourceTier.OFFICIAL,
-    # --- Credible news ---
+    "mti.gov.sg": SourceTier.OFFICIAL,
+    # --- Credible news (Singapore) ---
     "channelnewsasia.com": SourceTier.CREDIBLE_NEWS,
     "straitstimes.com": SourceTier.CREDIBLE_NEWS,
     "todayonline.com": SourceTier.CREDIBLE_NEWS,
-    "bernama.com": SourceTier.CREDIBLE_NEWS,
-    "thestar.com.my": SourceTier.CREDIBLE_NEWS,
-    "nst.com.my": SourceTier.CREDIBLE_NEWS,
-    "malaymail.com": SourceTier.CREDIBLE_NEWS,
-    "freemalaysiatoday.com": SourceTier.CREDIBLE_NEWS,
+    "mothership.sg": SourceTier.CREDIBLE_NEWS,
+    "mediacorp.sg": SourceTier.CREDIBLE_NEWS,
+    "8world.com": SourceTier.CREDIBLE_NEWS,
 }
 
 

@@ -17,7 +17,11 @@ export type Verdict =
 /** How authoritative a source is. Drives ranking and UI weight. */
 export type SourceTier = "primary" | "official" | "credible_news" | "secondary";
 
-export type Jurisdiction = "Singapore" | "Malaysia" | "Overseas" | "Unknown";
+/**
+ * Singapore-only MVP. "Overseas" is load-bearing rather than vestigial: an
+ * overseas recall is what refutes a claim of a Singapore recall.
+ */
+export type Jurisdiction = "Singapore" | "Overseas" | "Unknown";
 
 /** Which of the three in-scope domains a claim belongs to. */
 export type Domain = "legal" | "product_safety" | "policy" | "unknown";

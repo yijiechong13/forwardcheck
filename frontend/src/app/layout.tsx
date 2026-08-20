@@ -15,9 +15,9 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "ForwardCheck — Verify forwarded news claims",
+  title: "ForwardCheck SG — Verify forwarded claims",
   description:
-    "Verify forwarded news and status claims from Singapore and Malaysia before you pass them on. Structured claim-by-claim verification with cited evidence.",
+    "Verifies forwarded Singapore public-interest claims by decomposing them into status claims, retrieving official or credible evidence, and producing source-backed verdicts with timelines.",
 };
 
 export default function RootLayout({

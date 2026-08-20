@@ -18,7 +18,7 @@ from collections import Counter
 from datetime import date, datetime
 
 from app.config import settings
-from app.data.mock_sources import topic_of
+from app.data.mock_sources import ALL_EVIDENCE, topic_of
 from app.models.schemas import Evidence, TimelineEntry
 from app.models.status import (
     Domain,
@@ -110,6 +110,18 @@ def freshness(state: PipelineState) -> PipelineState:
         for doc in state.evidence
         if dominant_cluster is None or topic_of(doc) == dominant_cluster
     ]
+
+    # Include same-cluster documents the *timeline* needs even when no single
+    # claim retrieved them. A claim of "recalled in Singapore" retrieves the
+    # local advisories that refute it, but the overseas recall — the thing that
+    # actually happened — may never surface against that claim. Omitting it
+    # would draw a timeline showing no recall anywhere, which misrepresents the
+    # event just as badly as the forward does.
+    if dominant_cluster is not None:
+        known = {doc.id for doc in timeline_docs}
+        for doc in ALL_EVIDENCE:
+            if doc.id not in known and topic_of(doc) == dominant_cluster:
+                timeline_docs.append(doc)
 
     # Best (earliest) document asserting each rung, from the dominant cluster.
     by_status: dict[str, list[Evidence]] = {}

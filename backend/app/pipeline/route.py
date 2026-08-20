@@ -37,12 +37,19 @@ _STATUS_PATTERNS: list[tuple[str, StatusType]] = [
 
     # --- Product safety ladder ---
     (r"\bban(?:ned|s)?\b|\bprohibit(?:ed|ion)\b|\bwithdrawn\s+from\s+sale\b", StatusType.BAN),
-    (r"\brecall(?:ed|s)?\b.{0,40}\b(?:singapore|malaysia|local(?:ly)?|here)\b"
-     r"|\b(?:singapore|malaysia|local)\b.{0,30}\brecall(?:ed|s)?\b", StatusType.LOCAL_RECALL),
+    (r"\brecall(?:ed|s)?\b.{0,40}\b(?:singapore|local(?:ly)?|here|sg)\b"
+     r"|\b(?:singapore|local)\b.{0,30}\brecall(?:ed|s)?\b", StatusType.LOCAL_RECALL),
     (r"\brecall(?:ed|s)?\b.{0,40}\b(?:overseas|abroad|us|uk|australia|japan|europe)\b"
      r"|\boverseas\s+recall\b", StatusType.OVERSEAS_RECALL),
     (r"\brecall(?:ed|s|ing)?\b", StatusType.LOCAL_RECALL),
     (r"\bwarning\b|\bwarned\b|\bdo\s+not\s+(?:eat|use|consume|buy)\b", StatusType.WARNING),
+    # Scope claims about *which* products are affected. "The whole product line
+    # is affected" is a product-safety assertion even though it names no
+    # recall verb, and over-scoping a real batch recall is a core escalation.
+    (r"\b(?:whole|entire|all)\s+(?:product|range|line|batch|stock|brand)\b"
+     r"|\ball\s+(?:products|batches|items)\b|\bevery\s+(?:batch|product)\b"
+     r"|\btaken\s+off\s+(?:all\s+)?shelves\b|\bremoved\s+from\s+(?:all\s+)?shelves\b",
+     StatusType.LOCAL_RECALL),
     (r"\badvisory\b|\badvis(?:ed|es)\b|\bcaution(?:ed)?\b", StatusType.ADVISORY),
 
     # --- Policy ladder ---
@@ -62,13 +69,16 @@ _STATUS_PATTERNS: list[tuple[str, StatusType]] = [
     (r"\bmust\s+be\b|\brequired\s+to\b|\bmandatory\b|\bcompulsory\b", StatusType.EFFECTIVE),
 ]
 
+#: Singapore-only MVP. OVERSEAS is matched so that a claim about a foreign
+#: recall is not mistaken for a local one — that distinction is a core check,
+#: not an afterthought.
 _JURISDICTION_PATTERNS: list[tuple[str, Jurisdiction]] = [
-    (r"\bsingapore\b|\bhdb\b|\bavs\b|\bnparks\b|\bspf\b|\bchangi\b|\bs\$|\bsgd\b"
-     r"|\bmoh\b|\bhsa\b|\bsfa\b|\bica\b|\bmindef\b|\bns\b|\benlistment\b", Jurisdiction.SINGAPORE),
-    (r"\bmalaysia\b|\bkuala lumpur\b|\bpdrm\b|\bkpdn\b|\bringgit\b|\brm\d|\bjohor\b"
-     r"|\bpenang\b|\bselangor\b", Jurisdiction.MALAYSIA),
-    (r"\b(?:the\s+)?(?:us|usa|uk|australia|japan|china|europe|america)\b"
-     r"|\boverseas\b|\babroad\b", Jurisdiction.OVERSEAS),
+    (r"\bsingapore\b|\bsingaporean\b|\bhdb\b|\bavs\b|\bnparks\b|\bspf\b"
+     r"|\bchangi\b|\bs\$|\bsgd\b|\bmoh\b|\bhsa\b|\bsfa\b|\bica\b|\bmom\b"
+     r"|\bmindef\b|\bagc\b|\bcpf\b|\bns\b|\benlistment\b|\bparliament\b",
+     Jurisdiction.SINGAPORE),
+    (r"\b(?:the\s+)?(?:us|usa|uk|australia|japan|china|europe|america|overseas)\b"
+     r"|\babroad\b|\bother\s+countr(?:y|ies)\b", Jurisdiction.OVERSEAS),
 ]
 
 #: Generalisation markers. "All X will automatically be Y" is a different kind

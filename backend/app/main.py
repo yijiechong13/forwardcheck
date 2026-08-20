@@ -19,10 +19,12 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("forwardcheck")
 
 app = FastAPI(
-    title="ForwardCheck API",
+    title="ForwardCheck SG API",
     description=(
-        "Structured verification of forwarded news and status claims for "
-        "Singapore and Malaysia. All bundled evidence is seeded sample data."
+        "Verifies forwarded public-interest claims by decomposing them into "
+        "status claims, retrieving official or credible Singapore evidence, and "
+        "producing source-backed verdicts with timelines. All bundled evidence "
+        "is seeded sample data."
     ),
     version="0.3.0",
 )

@@ -71,7 +71,7 @@ export default function Home() {
             <Section
               index="03"
               title="Evidence"
-              description="Sources retrieved for these claims, ranked by authority. Each card states which claim it supports or refutes."
+              description="Sources retrieved for these claims, ranked by authority: official and primary Singapore sources above credible news. Each card states which claim it supports or refutes."
               action={
                 <span className="hidden shrink-0 text-[11px] text-fg-subtle sm:block">
                   {result.evidence.length} documents
@@ -84,7 +84,7 @@ export default function Home() {
             <Section
               index="04"
               title="Status timeline"
-              description="Where this event actually sits on the status ladder. Stages with no supporting evidence are marked rather than omitted."
+              description="Where this event actually sits on the status ladder — investigated, charged, convicted; proposed, passed, enforced. Stages with no supporting evidence are marked rather than omitted."
             >
               <Timeline timeline={result.timeline} />
             </Section>
@@ -131,21 +131,24 @@ function Header({ apiUp }: { apiUp: boolean | null }) {
             F
           </span>
           <span className="text-[15px] font-semibold tracking-tight text-fg">
-            ForwardCheck
+            ForwardCheck<span className="text-fg-subtle"> SG</span>
           </span>
         </div>
 
         <h1 className="mt-6 max-w-2xl text-3xl font-semibold leading-[1.15] tracking-tight text-fg sm:text-4xl">
-          Verify forwarded news claims before you pass them on.
+          Verify forwarded claims before you pass them on.
         </h1>
-        <p className="mt-3.5 max-w-xl text-[14px] leading-relaxed text-fg-muted">
+        <p className="mt-3.5 max-w-2xl text-[14px] leading-relaxed text-fg-muted">
           Forwarded messages rarely invent an event. They take a real one and push its
-          status one rung too far — investigated becomes charged, a maximum penalty
-          becomes an automatic fine. ForwardCheck checks each claim separately, against
-          cited evidence, for Singapore and Malaysia.
+          status one rung too far — investigated becomes charged, a law that passed
+          becomes a law being enforced, an overseas recall becomes a local one.
+          ForwardCheck decomposes each message into separate status claims, retrieves
+          official or credible Singapore evidence, and gives every claim its own
+          source-backed verdict.
         </p>
 
         <div className="mt-6 flex flex-wrap items-center gap-x-5 gap-y-1.5 font-mono text-[10px] tracking-[0.14em] text-fg-subtle">
+          <span>SINGAPORE</span>
           <span>LEGAL STATUS</span>
           <span>PRODUCT SAFETY</span>
           <span>POLICY &amp; REGULATION</span>
@@ -211,7 +214,7 @@ function Footer() {
     <footer className="border-t border-edge">
       <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-3 px-5 py-6 sm:px-8">
         <p className="text-[11px] text-fg-subtle">
-          ForwardCheck · status verification for Singapore and Malaysia
+          ForwardCheck SG · public-status verification for forwarded claims
         </p>
         <p className="font-mono text-[10px] tracking-wide text-fg-subtle">
           MOCK MODE · NO API KEYS REQUIRED

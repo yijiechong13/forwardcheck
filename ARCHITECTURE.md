@@ -1,4 +1,4 @@
-# ForwardCheck — Architecture
+# ForwardCheck SG — Architecture
 
 ## System shape
 
@@ -25,6 +25,15 @@
                  │  default = MOCK, no keys     │
                  └──────────────────────────────┘
 ```
+
+## Scope
+
+Singapore-only public-status verification. One jurisdiction gives a controlled source hierarchy
+and a labellable eval set. `Overseas` exists as a foil, not a second market: refuting "recalled
+in Singapore" requires evidence the recall happened elsewhere.
+
+This is **not** a scam or phishing detector. The question is always *what is officially or
+credibly confirmed about this claim's status*, never *is the sender malicious*.
 
 ## Why a pipeline, not a prompt
 

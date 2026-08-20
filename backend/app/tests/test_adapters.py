@@ -14,6 +14,7 @@ from app.models.schemas import SourceTier
 from app.services.llm_adapter import MockLLMAdapter, get_llm_adapter
 from app.services.retrieval_adapter import MockRetrievalAdapter, get_retrieval_adapter
 from app.services.search_adapter import (
+    SOURCE_ALLOWLIST,
     MockSearchAdapter,
     get_search_adapter,
     tier_for_domain,
@@ -52,12 +53,30 @@ def test_search_returns_nothing_rather_than_inventing_results():
     [
         ("https://www.avs.nparks.gov.sg/page", SourceTier.OFFICIAL),
         ("https://sso.agc.gov.sg/Act/ABA1965", SourceTier.PRIMARY),
-        ("https://www.thestar.com.my/news/x", SourceTier.CREDIBLE_NEWS),
+        ("https://www.channelnewsasia.com/singapore/x", SourceTier.CREDIBLE_NEWS),
+        ("https://mothership.sg/2026/x", SourceTier.CREDIBLE_NEWS),
         ("https://random-blog.example.com/post", None),
     ],
 )
 def test_allowlist_assigns_a_known_tier_or_rejects(url, expected):
     assert tier_for_domain(url) == expected
+
+
+def test_allowlist_is_singapore_only():
+    """MVP scope: no non-Singapore jurisdictions in the source hierarchy."""
+    for domain in SOURCE_ALLOWLIST:
+        assert not domain.endswith(".my"), f"non-SG domain in allowlist: {domain}"
+
+
+def test_social_sources_are_never_allowlisted():
+    """Secondary/social sources must not be usable as proof."""
+    for url in (
+        "https://www.facebook.com/groups/x",
+        "https://t.me/somechannel",
+        "https://x.com/someone/status/1",
+        "https://someblog.wordpress.com/post",
+    ):
+        assert tier_for_domain(url) is None
 
 
 def test_retrieval_scores_are_normalised():
