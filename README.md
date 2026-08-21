@@ -29,45 +29,45 @@ scam or phishing detector.
 
 ## Features
 
-**Claim-Level Decomposition**
+**🧩 Claim-Level Decomposition**
 One message becomes several independently verifiable claims, each with its own
 verdict. Exact amounts, dates, organisations and modality words ("up to", "all",
 "automatically") are preserved, because those are usually where the distortion lives.
 
-**Live Web Retrieval**
+**🌐 Live Web Retrieval**
 Every claim is searched at verification time via Tavily, with `site:` operators
 targeting official Singapore domains first. Policies, advisories, recalls and
 deadlines change — a prebuilt index would answer with whatever was true when it was
 built, which is the exact failure mode being checked.
 
-**Context-Aware Document Chunking**
+**📄 Context-Aware Document Chunking**
 Retrieved pages are fetched and split on heading and paragraph boundaries (1400
 characters, 150 overlap), so a fact straddling a boundary still appears whole
 somewhere. Each chunk carries its URL, publisher, tier, date, heading and
 originating query.
 
-**Evidence Ranking and Grading**
+**⚖️ Evidence Ranking and Grading**
 Passages are ranked by lexical overlap, boosted for exact entity/date/amount matches
 and weighted by source tier and freshness. The model then grades every
 (claim, passage) pair — supports, refutes, partially supports, or does not answer —
 using only the supplied text.
 
-**Bounded Agentic Re-Search**
+**🔁 Bounded Agentic Re-Search**
 When a claim's evidence is missing, conflicting or outdated, the system rewrites the
 query and searches again — at most one extra round per claim, under a hard request
 budget, with the reason recorded in the trace.
 
-**Evidence-Based Verdicts and Abstention**
+**✅ Evidence-Based Verdicts and Abstention**
 Verdicts are computed by deterministic Python from the graded evidence, never
 generated as prose. Without qualifying evidence, the answer is
 `Insufficient evidence`.
 
-**Traceable Sources**
+**🔗 Traceable Sources**
 Every non-abstaining verdict cites the passages behind it, linked to the real URL
 and labelled with publisher, tier, date, and whether it came from a full page or
 only a search snippet.
 
-**Cost and Safety Controls**
+**🛡️ Cost and Safety Controls**
 Hard per-request budgets on billable provider calls, TTL caching, SSRF-guarded and
 size-capped fetching, prompt-injection defences, and a test suite that cannot spend
 money.
